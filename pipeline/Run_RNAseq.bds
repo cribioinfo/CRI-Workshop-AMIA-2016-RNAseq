@@ -1,0 +1,181 @@
+#!/usr/bin/env bds
+
+int safeSleep = 20
+
+//------------- INCLUDE -------------//
+
+include "/home/ubuntu/CRI-Workshop-AMIA-2016-RNAseq/pipeline/lib/print.bds"
+include "/home/ubuntu/CRI-Workshop-AMIA-2016-RNAseq/pipeline/module/Run_QualityControl.bds"
+include "/home/ubuntu/CRI-Workshop-AMIA-2016-RNAseq/pipeline/module/Run_PreProcessing.bds"
+include "/home/ubuntu/CRI-Workshop-AMIA-2016-RNAseq/pipeline/module/Run_Alignment.bds"
+include "/home/ubuntu/CRI-Workshop-AMIA-2016-RNAseq/pipeline/module/Run_ReadCountSingle.bds"
+include '/home/ubuntu/CRI-Workshop-AMIA-2016-RNAseq/pipeline/module/Run_RNAseqMetrics'
+// include "module/Run_ReadCountMulti.bds"
+
+//------------- MAIN -------------//
+
+// arguments
+string{} samplemap
+string[] pids 
+string[] samples help List of sample IDs, separated by space. 
+string[] aligners help List of aligners, separated by space. Values include [star].
+string[] callers help List of diff expr gene analysis tools, separated by space. Values include [limmavoom].
+string samplefile = "" help A file containing the list of samples IDs (one sample per line).
+string project = "myProject" help Project title. Default: myProject.
+string projdir = "." help Project output directory. Default: the current directory. 
+
+// project settings
+string cfgdir = projdir + "/configs/" + project + "_project"
+string flagConfig = cfgdir + "/" + project + ".flag.cfg"
+string refConfig = cfgdir + "/" + project + ".reference.cfg"
+string softwareConfig = cfgdir + "/" + project + ".software.cfg"
+string multiConfig = cfgdir + "/" + project + ".multisample.cfg"
+string chpdir = projdir + "/checkpoints/" + project + "_chp"
+
+// other settings
+// rseqc (python) does NOT work on stats due to lib missing
+string[] metrics = ['picard', 'rseqc', 'bedtools']
+
+// read sample list; remove redundant sample ids
+if(samplefile != "") { samples += samplefile.readLines() }
+for(string sm : samples) { samplemap{sm} = "" }
+samples = samplemap.keys() 
+
+// run start 
+CheckInput()
+PrintHeader()
+PrintInfo()
+
+println info("RNAseq", "START | proj=$project")
+
+for (string sample : samples) {
+	sampleConfig := projdir + "/configs/" + project + "_samples/" + sample + "/" + sample + ".cfg"
+	pid := par RunSample(sample, aligners, callers, projdir, sampleConfig, flagConfig, refConfig, softwareConfig)
+	pids.push(pid)
+}
+
+wait pids
+
+// pids = []
+// for (string aligner : aligners) {
+// 	pid := par RunSampleMulti(project, aligner, callers, projdir, multiConfig, flagConfig, refConfig, softwareConfig)
+// 	pids.push(pid)
+// }
+
+// wait pids 
+
+// wait
+
+// run end
+println info("RNAseq", "END | proj=$project")
+PrintFooter()
+
+//------------- FUNCTION -------------//
+
+void RunSample(string sample, string[] aligners, string[] callers, string projdir, string sampleConfig, string flagConfig, string refConfig, string softwareConfig) {
+	
+	string[] pids
+	string sampleConfig = projdir + "/configs/" + project + "_samples/" + sample + "/" + sample + ".cfg"
+
+	Run_QualityControl(sample, projdir, sampleConfig, flagConfig, refConfig, softwareConfig)
+	Run_PreProcessing(sample, projdir, sampleConfig, flagConfig, refConfig, softwareConfig)
+
+	for (string aligner : aligners) {
+		pid := par RunSampleAligner(sample, aligner, callers, projdir, sampleConfig, flagConfig, refConfig, softwareConfig)
+		pids.push(pid)
+	}
+	
+	// wait pids 
+	sys sleep 10
+
+}
+
+void RunSampleAligner(string sample, string aligner, string[] callers, string projdir, string sampleConfig, string flagConfig, string refConfig, string softwareConfig) {
+
+	string[] pids
+
+	Run_Alignment(sample, aligner, projdir, sampleConfig, flagConfig, refConfig, softwareConfig)
+
+	// quantify expression
+	for (string caller : callers) {
+		pid := par Run_ReadCountSingle(sample, aligner, caller, projdir, sampleConfig, flagConfig, refConfig, softwareConfig)
+		pids.push(pid)
+	}
+
+	// collect rnaseq metrics
+	for (string metric : metrics) {
+		pid := par Run_RNAseqMetrics(sample, aligner, metric, projdir, sampleConfig, flagConfig, refConfig, softwareConfig)
+		pids.push(pid)
+	}
+
+	// wait pids 
+	sys sleep 10
+
+}
+
+// void RunSampleMulti(string project, string aligner, string[] callers, string projdir, string multiConfig, string flagConfig, string refConfig, string softwareConfig) {
+
+// 	string[] pids
+
+// 	for(string caller : callers) {
+// 		pid := par RunSampleMultiCall(project, aligner, caller, projdir, multiConfig, flagConfig, refConfig, softwareConfig)
+// 	}
+
+// 	// wait pids 
+// 	sys sleep 10 
+
+// }
+
+// void RunSampleMultiCall(string project, string aligner, string caller, string projdir, string multiConfig, string flagConfig, string refConfig, string softwareConfig) {
+
+// 	Run_ReadCountMulti(project, aligner, caller, projdir, multiConfig, flagConfig, refConfig, softwareConfig)
+
+// 	sys sleep 10 
+
+// }
+
+void PrintHeader() {
+	println "\n--------------------------------------------------------------------------------"
+	sys echo "Pipeline START: "`date`
+	println "--------------------------------------------------------------------------------"
+}
+
+void PrintFooter() {
+	println "--------------------------------------------------------------------------------"
+	sys echo "Pipeline END: "`date`
+	println "--------------------------------------------------------------------------------"
+
+}
+
+void PrintInfo() {
+
+    println "Project Title     = [ $project ]"
+	println "Project Directory = [ $projdir ]"
+	print "Samples           = [ "
+	print samples.join(" ")
+	println " ]"
+	print "Aligners          = [ "
+	print aligners.join(" ")
+	println " ]"
+	print "Callers           = [ " 
+	print callers.join(" ")
+	println " ]"
+	// println "BDS config        = [ $config ]"
+	println "BDS retry         = [ $retry ]"
+	println  "BDS system        = [ $system ] (if empty, BDS is running local)"
+	println "--------------------------------------------------------------------------------"
+}
+
+void CheckInput() {
+	if(samples.size() == 0) {
+	error info("ExScaliburGMD", "Sample list is empty. Program terminated!")
+	}
+	if(aligners.size() == 0) {
+		println info("ExScaliburGMD", "Aligner list is empty. -bwamem is switched on by default. Program continue.")
+	}
+	if(callers.size() == 0) {
+		println info("ExScaliburGMD", "Caller list is empty. -gatkhc is switched on by default. Program continue.")
+	}
+
+}
+

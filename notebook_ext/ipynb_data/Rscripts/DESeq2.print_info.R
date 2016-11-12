@@ -1,0 +1,6 @@
+print(paste0('Cancer = ', cancer))
+print(paste0('gene type = ', gene.type))
+print(paste0('DEG fdr cutoff = ', fdr))
+print(paste0('DEG fc cutoff = ', fc))
+print(paste0('Expression file = ', expr.file))
+print(paste0('Sample group file  = ', sample.file))

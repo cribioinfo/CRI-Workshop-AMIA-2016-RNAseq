@@ -1,0 +1,336 @@
+#!/usr/bin/env bds
+
+
+// run star program 
+
+include "print.bds"
+include "getmem.bds"
+include "sambamba.bds"
+include "checkbam.bds"
+
+string[] star(string sample, string readgroup, string starRunMode, string rgstring, string tmpdir, string infile, string outfile, string outdir, string logfile, string logdir, string softwareConfig, string refConfig) {
+
+	// initialize
+	string{} swParam = config(softwareConfig)
+	string{} refParam = config(refConfig)
+	string[] modlist
+	string modname = "RNAseq::star"
+	string starExe
+	string sambambaExe
+	string modsource
+	string modload = ""
+	int threads = 1
+	int memory = 1
+	int modFlag = 0
+	int fastqFormat = 33
+
+	// println info(modname, "START | sm=$sample | rg=$readgroup")
+
+	string[] tids
+	string[] infiles = infile.split(",")
+	string[] tid4
+	string[] chrs
+	string in1
+	string in2
+	string in3
+	string tid1
+	string tid2
+	string tid3
+	string formatParam = ""
+	string refGenome
+	string refGenomeDict
+	string annoBed
+	string annoBed12
+	string annoGtf
+	string annoRefflat 
+	string annoRibosomeRNABed
+	string annoRibosomeRNAinterval
+	string chromSize
+	string chrom
+	string starIndex
+	string genomeLoad 
+	string readFilesCommand
+	string outSAMstrandField
+	string outFilterIntronMotifs
+	string outSamType
+	int infileTotal
+	int minBaseQ = 0
+	int minMapQ = 0
+	int maxMemPerThread
+	int readsTotal // check empty BAM file (with only header but NO reads!)
+
+	// assign values
+	if(swParam.hasKey("java_module")) { modlist.push(swParam{"java_module"}) }
+	if(swParam.hasKey("main_module_source")) { modsource = swParam{"main_module_source"} }
+	if(swParam.hasKey("main_use_module")) { modFlag = swParam{"main_use_module"}.parseInt() }
+	if(swParam.hasKey("main_min_map_qual")) { minMapQ = swParam{"main_min_map_qual"}.parseInt() }
+	if(swParam.hasKey("star_exe")) { starExe = swParam{"star_exe"} }
+	if(swParam.hasKey("star_module")) { modlist.push(swParam{"star_module"}) }
+	if(swParam.hasKey("star_threads")) { threads = swParam{"star_threads"}.parseInt() }
+	if(swParam.hasKey("star_mem")) { memory = swParam{"star_mem"}.parseInt() }
+	if(swParam.hasKey("star_genome_load")) { genomeLoad = swParam{"star_genome_load"} }
+	if(swParam.hasKey("star_readFiles_command")) { readFilesCommand = swParam{"star_readFiles_command"} }
+	if(swParam.hasKey("star_out_sam_strand_field")) { outSAMstrandField = swParam{"star_out_sam_strand_field"} }
+	if(swParam.hasKey("star_out_filter_intron_motifs")) { outFilterIntronMotifs = swParam{"star_out_filter_intron_motifs"}}
+	if(swParam.hasKey("star_out_sam_type")) { outSamType = swParam{"star_out_sam_type"} }
+
+	if(swParam.hasKey("sambamba_exe")) { sambambaExe = swParam{"sambamba_exe"} }
+	if(swParam.hasKey("sambamba_module")) { modlist.push(swParam{"sambamba_module"}) }
+	// if(swParam.hasKey("sambamba_max_mem_per_thread")) { maxMemPerThread = swParam{"sambamba_max_mem_per_thread"}.parseInt() }
+
+	if(refParam.hasKey("grch38_genome")) { refGenome = refParam{"grch38_genome"} }
+	if(refParam.hasKey("grch38_genomedict")) { refGenomeDict = refParam{"grch38_genomedict"} }
+	if(refParam.hasKey("grch38_chrs")) { chrs = refParam{"grch38_chrs"}.split(",") }
+	if(refParam.hasKey("grch38_anno_bed")) { annoBed = refParam{"grch38_anno_bed"} }
+	if(refParam.hasKey("grch38_anno_bed12")) { annoBed12 = refParam{"grch38_anno_bed12"} }
+	if(refParam.hasKey("grch38_anno_gtf")) { annoGtf = refParam{"grch38_anno_gtf"} }
+	if(refParam.hasKey("grch38_anno_refflat")) { annoRefflat = refParam{"grch38_anno_refflat"} }
+	if(refParam.hasKey("grch38_anno_ribosome_rna_bed")) { annoRibosomeRNABed = refParam{"grch38_anno_ribosome_rna_bed"} }
+	if(refParam.hasKey("grch38_anno_ribosome_rna_interval")) { annoRibosomeRNAinterval = refParam{"grch38_anno_ribosome_rna_interval"} }
+	if(refParam.hasKey("grch38_chrom_size")) { chromSize = refParam{"grch38_chrom_size"} }
+	if(refParam.hasKey("grch38_star_index")) { starIndex = refParam{"grch38_star_index"} }
+
+	// note that sometimes ec2 complains "/bin/bash: sambamba: command not found" and 
+	// gmd will keep re-generating those BAM files because readsTotal will always be 0 (condition IS true)
+	// it is because you can NOT pass variable with ";" symbol in its value coz bds considers ";" as breaks!!!
+	// as a result, only string before the first ";" is passed down to function...
+
+	// println "modload:"
+	if(modFlag == 1) {
+		if(modsource.length() > 0) { modload = ". $modsource; " }
+		for(string mod : modlist) { modload += "module load $mod; " }
+	} else { modload = '' }
+
+	memory = getmem(memory * G, threads)
+
+	// println "modlist:"
+	// printArray(modlist)
+
+	infileTotal = infiles.size()
+	if(infileTotal == 1) { in1 = infiles.head() }
+	if(infileTotal == 2) { (in1, in2) = infiles }
+	if(infileTotal == 3) { (in1, in2, in3) = infiles }
+	// maxMemPerThread = memory / threads
+
+	// sanity check
+	if((infileTotal < 1) || (infileTotal > 3)) { 
+		error info(modname, "sm=$sample | rg=$readgroup | infiles and/or outfiles count incorrect! in=$infileTotal" ) 
+	}	
+
+	// set format parameter
+	if(fastqFormat == 64) { formatParam = " -I" }
+	else if(fastqFormat != 33) {
+		println info(modname, "sm=$sample | rg=$readgroup | Warning! fastq format is neither 33 nor 64. Use [33] as default")
+	}
+	
+	// run start
+	if(! outdir.isDir()) { outdir.mkdir() }	
+	if(! logdir.isDir()) { logdir.mkdir() }	
+	if(! tmpdir.isDir()) { tmpdir.mkdir() }
+
+	// single-end
+	if(infileTotal == 1) {
+		outfileSE := outdir + "/" + readgroup + ".se.Aligned.sortedByCoord.out.bam"
+		logSE := logfile.swapExt(".log",".se.log")
+
+		// notice that if you rename the bam file the original output is gone, hence the dependency to run aln will always be [FALSE]
+		// check the dependency of input and renamed bam file instead ...
+		if(outfile <- in1) { 
+
+			// check whether the input file exists but is empty! (e.g. only carries the header ...)
+			readsTotal = CheckBAM(outfileSE, modsource, modlist, modFlag, threads, sambambaExe)
+
+			// run aln
+			if((outfileSE + ".bai" <- in1) || (readsTotal == 0)) { 
+				println info(modname, "task=run_star_single | sm=$sample | rg=$readgroup | run=1")
+
+				if (starRunMode == 'alignReads') {
+					tid1 = STARalignReads(readgroup, rgstring, starIndex, outdir, logSE, logdir, starExe, sambambaExe, threads, memory, modload, in1, minMapQ, genomeLoad, readFilesCommand, outSAMstrandField, outFilterIntronMotifs, outSamType, outfileSE, readsTotal)
+					tids.push(tid1)
+				}
+			}
+			else {
+				println info(modname, " task=run_star_single | rg=$readgroup | run=0")
+			}
+
+			// wait tids
+
+			// rename bam
+			if(outfile <- outfileSE) { 
+				wait tid1
+				println info(modname, "task=rename_bamfile | sm=$sample | rg=$readgroup | run=1")
+				tid3 = task(outfile <- outfileSE, cpus := threads, mem := memory, \
+					outfileSE.exists()) {
+					sys echo "$sample::$readgroup::renameBAM"
+					sys $modload
+					sys echo -e "+++++++++ Rename bam +++++++++ " >> $logdir/$logSE 
+					sys mv $outfileSE $outfile >> $logdir/$logSE 2>&1
+					sys $sambambaExe index $outfile >> $logdir/$logSE 2>&1
+					sys echo -e "+++++++++ Done! +++++++++ " >> $logdir/$logSE 
+					sys sleep $safeSleep
+				}		
+
+				tids.push(tid3)
+			}
+			else {
+				println info(modname, "task=rename_bamfile | sm=$sample | rg=$readgroup | run=0")
+			}
+
+		} else {
+			println info(modname, " task=run_star_single+rename_bamfile | rg=$readgroup | run=0")
+		}
+	}
+	// paired-end
+	else if(infileTotal >= 2) {
+		outfilePE := outdir + "/" + readgroup + ".pe.Aligned.sortedByCoord.out.bam"
+		outfileSE := outdir + "/" + readgroup + ".se.Aligned.sortedByCoord.out.bam"
+		logSE := logfile.swapExt(".log",".se.log")
+		logPE := logfile.swapExt(".log",".pe.log")
+
+		readsTotal = CheckBAM(outfileSE, modsource, modlist, modFlag, threads, sambambaExe)
+
+		// run PE on in1 and in2
+		if((outfilePE + ".bai" <- [in1,in2]) || (readsTotal == 0)) { 
+			println info(modname, "task=run_star_paired | sm=$sample | rg=$readgroup | run=1")
+
+			if (starRunMode == 'alignReads') {
+				tid1 = STARalignReads(readgroup, rgstring, starIndex, outdir, logPE, logdir, starExe, sambambaExe, threads, memory, modload, in1+','+in2, minMapQ, genomeLoad, readFilesCommand, outSAMstrandField, outFilterIntronMotifs, outSamType, outfilePE, readsTotal)
+				tids.push(tid1)
+
+			}
+		}
+		else {
+			println info(modname, "task=run_star_paired | sm=$sample | rg=$readgroup | run=0")
+		}
+
+		// run SE on in3
+		if(infileTotal == 3) { 
+
+			readsTotal = CheckBAM(outfileSE, modsource, modlist, modFlag, threads, sambambaExe)
+
+			if((outfileSE + ".bai" <- in3) || (readsTotal == 0)){
+				println info(modname, "task=run_star_unpaired | sm=$sample | rg=$readgroup | run=1")
+
+				if (starRunMode == 'alignReads') {
+					// tids = STARalignReads(readgroup, rgstring, starIndex, outdir, logSE, logdir, starExe, sambambaExe, threads, memory, modload, in3, minMapQ, genomeLoad, readFilesCommand, outSAMstrandField, outFilterIntronMotifs, outSamType, outfileSE, readsTotal)
+					tids.push(tids)
+				}
+			}
+			else {
+				println info(modname, "task=run_star_unpaired | sm=$sample | rg=$readgroup | run=0")
+			}
+		}
+
+		// wait tids
+		
+		// if no in3, rename PE bam 
+		if(infileTotal == 2) {
+			if(outfile <- outfilePE) { 
+				wait tid1
+				println info(modname, "task=rename_bamfile | sm=$sample | rg=$readgroup | run=1")
+				tid3 = task(outfile <- outfilePE, cpus := threads, mem := memory, \
+					outfilePE.exists()) {
+					sys echo "$sample::$readgroup::renameBAM"
+					sys $modload
+					sys echo -e "+++++++++ Rename bam +++++++++ " >> $logdir/$logPE 
+					sys mv $outfilePE $outfile >> $logdir/$logPE 2>&1
+					sys $sambambaExe index $outfile >> $logdir/$logPE 2>&1
+					sys echo -e "+++++++++ Done! +++++++++ " >> $logdir/$logPE		
+					sys sleep $safeSleep		
+				}		
+				
+				tids.push(tid3)
+			}
+			else {
+				println info(modname, "task=rename_bamfile | sm=$sample | rg=$readgroup | run=0")
+			}
+		}
+		// if with in3. merge pe.bam and se.bam
+		else if(infileTotal == 3) { 
+			// note that sambamba merge will take place first if without wait... 
+			wait [tid1,tid2]
+
+			if(outfile <- [outfilePE,outfileSE]) { 
+				println info(modname, "task=merge_bamfiles | sm=$sample | rg=$readgroup | run=1")
+				sys echo -e "+++++++++ Merge bams +++++++++ " >> $logdir/$logSE 
+
+				util := "MergeSamFiles"
+				infile := outfilePE + "," + outfileSE
+				logfile := readgroup + ".star." + ".sambamba_" + util + ".log"
+				tid4 = sambamba(sample + "::" + readgroup, util, refGenome, '', tmpdir, infile, outfile, outdir, logfile, logdir, softwareConfig)
+
+				tids += tid4
+				sys echo -e "+++++++++ Done! +++++++++ " >> $logdir/$logSE 
+				sys echo -e "+++++++++ Done! +++++++++ " >> $logdir/$logPE 
+			}
+			else {
+				println info(modname, "task=merge_bamfiles | sm=$sample | rg=$readgroup | run=0")
+			}
+		}
+
+	}
+	
+	// println info(modname, "END | sm=$sample | rg=$readgroup")
+
+	return tids
+}
+
+
+//------------- FUNCTION -------------//
+
+string STARalignReads(string readgroup, string rgstring, string starIndex, string outdir, string logfile, string logdir, string starExe, string sambambaExe, int threads, int memory, string modload, string infile, int minMapQ, string genomeLoad, string readFilesCommand, string outSAMstrandField, string outFilterIntronMotifs, string outSamType, string outfile, int readsTotal) {
+
+	string tid
+	string[] infiles = infile.split(',')
+	string in1 
+	string in2
+	string outfilefn = outfile.removeExt("Aligned.sortedByCoord.out.bam")
+	int infileTotal
+
+	infileTotal = infiles.size()
+
+	if(infileTotal == 1) {
+		in1 = infiles.head()
+	} else if (infileTotal == 2) {
+		(in1, in2) = infiles
+	} else {
+		println info(modname, "sm=$sample | rg=$readgroup | Warning! input fastq file count is not 1 or 2. Possible wrong inputs? infileTotal=" + infileTotal)
+		exit 1
+	}
+
+	// println in1
+	// println outfile + ".bai"
+
+	if(infileTotal == 1) {
+		tid = task(outfile + ".bai" <- in1, cpus := threads, mem := memory, \
+		in1.length() > 0) {
+			sys echo "$sample::$readgroup::starSE"
+			sys set -o pipefail
+			sys $modload
+			sys echo -e "+++++++++ Running star single-end read mapping +++++++++ " > $logdir/$logfile
+			sys $starExe --runMode $starRunMode --genomeLoad $genomeLoad --outFileNamePrefix $outfilefn --readFilesCommand $readFilesCommand --genomeDir $starIndex --readFilesIn $in1 --runThreadN $threads --outSAMstrandField $outSAMstrandField --outFilterIntronMotifs $outFilterIntronMotifs --outSAMtype $outSamType >> $logdir/$logfile 2>&1
+			sys sleep 1 
+			sys echo -e "+++++++++ Index bam +++++++++ " >> $logdir/$logfile 
+			sys $sambambaExe index $outfile 2>> $logdir/$logfile
+			sys sleep $safeSleep
+		}
+
+	} 
+
+	if (infileTotal == 2) {
+		tid = task(outfile + ".bai" <- [in1,in2], cpus := threads, mem := memory, \
+			in1.length() > 0, in2.length() > 0) {
+			sys echo "$sample::$readgroup::starPE"
+			sys set -o pipefail
+			sys $modload
+			sys echo -e "+++++++++ Running star paired-end read mapping +++++++++ " > $logdir/$logfile
+			sys $starExe --runMode $starRunMode --genomeLoad $genomeLoad --outFileNamePrefix $outfilefn --readFilesCommand $readFilesCommand --genomeDir $starIndex --readFilesIn $in1 $in2 --runThreadN $threads --outSAMstrandField $outSAMstrandField --outFilterIntronMotifs $outFilterIntronMotifs --outSAMtype $outSamType >> $logdir/$logfile 2>&1
+			sys sleep 1 
+			sys echo -e "+++++++++ Index bam +++++++++ " >> $logdir/$logfile 
+			sys $sambambaExe index $outfile 2>> $logdir/$logfile
+			sys sleep $safeSleep
+		}
+	}
+
+	return tid 
+}

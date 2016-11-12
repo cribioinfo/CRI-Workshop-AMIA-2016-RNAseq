@@ -1,0 +1,13 @@
+Sample	FastQC_percent_duplicates	FastQC_percent_gc	FastQC_avg_sequence_length	FastQC_total_sequences	FastQC_percent_fails	Picard_MEDIAN_CV_COVERAGE	Picard_PCT_CODING_BASES	Picard_PCT_UTR_BASES	Picard_PCT_INTERGENIC_BASES	Picard_MEDIAN_3PRIME_BIAS	Picard_PCT_INTRONIC_BASES	Picard_MEDIAN_5PRIME_BIAS
+home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205282	59.0361567478	49.0	49.0	74126025.0	25.0							
+home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205283	59.1178704323	49.0	49.0	64695948.0	25.0							
+home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205284	61.1853461942	50.0	49.0	52972573.0	25.0							
+home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205285	57.7701112218	49.0	49.0	55005729.0	25.0							
+home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205286	58.845898145	49.0	49.0	61079377.0	25.0							
+home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205287	62.9554985645	50.0	49.0	66517156.0	25.0							
+home | ubuntu | data | rnaseq | fullset | picard | KO01.star						0.543889	58.3101	33.4385	2.4174	0.753142	5.8272	0.604469
+home | ubuntu | data | rnaseq | fullset | picard | KO02.star						0.594962	58.8784	32.8797	2.401	0.716697	5.8348	0.606772
+home | ubuntu | data | rnaseq | fullset | picard | KO03.star						0.714247	61.7987	30.5323	2.2622	0.653306	5.4	0.552032
+home | ubuntu | data | rnaseq | fullset | picard | WT01.star						0.497826	56.9128	34.312	2.4855	0.769921	6.2842	0.618131
+home | ubuntu | data | rnaseq | fullset | picard | WT02.star						0.513678	57.1253	34.4133	2.4843	0.761059	5.9714	0.607709
+home | ubuntu | data | rnaseq | fullset | picard | WT03.star						0.58278	58.7506	33.48	2.3788	0.738217	5.3832	0.593732

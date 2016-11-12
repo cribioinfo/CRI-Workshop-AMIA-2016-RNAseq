@@ -1,0 +1,187 @@
+#!/usr/bin/env bds
+
+void Run_Alignment(string sample, string aligner, string projdir, string sampleConfig, string flagConfig, string refConfig, string softwareConfig) {
+
+	println info("RNAseq::03_Run_Alignment", "START | sm=$sample | aln=$aligner")
+
+	//------------- INCLUDE -------------//
+
+	include "../lib/print.bds"
+	//include "lib/header.bds"
+	include "../lib/rgmap.bds"
+	include "../lib/star.bds"
+	include "../lib/sambamba.bds"
+
+	//sys source "config/module.rc"
+
+	//------------- MAIN -------------//
+
+	// initialize
+	string{} smParam = config(sampleConfig)
+	string{} flagParam = config(flagConfig)
+	string{} refParam = config(refConfig)
+	string{} rgParam
+	string{} rgFailMap
+	string[] rgConfigs
+	string[] rgs
+	string[] outfiles // keep track of all readgroup.bam files
+	// string[] tids
+	// string[] tid
+	string[] pids
+	string infile
+	string mergedfile // final sample.merged.bam file
+	string resultdir
+	string outdir
+	string logdir
+	string logfile
+	string readgroup
+	string rgstring
+	string flagfile
+	string starRunMode = 'alignReads'
+	string refGenome
+	// string pid
+	int preprocFlag = 0
+	int paired = 0
+	int forceIn = 0
+
+	// assign values
+	if(smParam.hasKey("rg_configs")) { rgConfigs = smParam{"rg_configs"}.split(",") }
+	else { 
+		error info("RNAseq::03_Run_Alignment", "sm=$sample | rg_configs does not exist in the config file! config = $sampleConfig") 
+	}
+	if(smParam.hasKey("sample_result_dir")) { resultdir = smParam{"sample_result_dir"} }
+	if(smParam.hasKey("sample_log_dir")) { logdir = smParam{"sample_log_dir"} }
+	if((smParam.hasKey("star_alnfile")) && (aligner=="star")) { mergedfile = smParam{"star_alnfile"} }
+	if(smParam.hasKey("qc_flagfile")) { rgFailMap = BuildRGmap(smParam{"qc_flagfile"}, "RG", "FAIL") }
+	if(smParam.hasKey("force_include")) { forceIn = smParam{"force_include"}.parseInt() }
+
+	if(flagParam.hasKey("run_preprocessing")) { preprocFlag = flagParam{"run_preprocessing"}.parseInt() }
+	if(refParam.hasKey("grch38_genome")) { refGenome = refParam{"grch38_genome"} }
+
+	if(! resultdir.exists()) { resultdir.mkdir() }
+	outdir = resultdir + "/alignment" 
+	if(! outdir.isDir()) { outdir.mkdir() }	
+
+	flagfile = resultdir + "/sample.exclude"
+
+	// printArray(rgstrings)
+
+	// run start
+	if(forceIn == 1) {
+		if(flagfile.exists()) { flagfile.delete() }
+	}
+
+	for (string cfg : rgConfigs) {
+		rgParam = config(cfg)
+		readgroup = ""
+		rgstring= ""
+		infile = ""
+		paired = 0
+
+		if(rgParam.hasKey("readgroup")) { readgroup = rgParam{"readgroup"} }
+		if(rgParam.hasKey("seqfiles")) { infile = rgParam{"seqfiles"} }
+		if(rgParam.hasKey("paired")) { paired = rgParam{"paired"}.parseInt() }
+		if(rgParam.hasKey("rg_string")) { rgstring = rgParam{"rg_string"} }
+
+		if( preprocFlag == 1 ) {
+			if(rgParam.hasKey("trimmomatic_files")) { 
+				infile = rgParam{"trimmomatic_files"}
+			}
+		}
+
+		// check whethe this rg passes QC
+		if(forceIn == 0) {
+			if((readgroup == "") || (rgFailMap.hasKey("$readgroup"))) { 
+				println info("RNAseq::03_Run_Alignment", "sm=$sample | rg=$readgroup | aln=$aligner | QC failed! Skip") 
+				continue
+			}
+		}
+
+		logfile = readgroup + "." + aligner + ".log"
+		outfile := outdir + "/" + readgroup + "." + aligner + ".bam"
+		outfiles.push(outfile)
+		rgs.push(readgroup)
+
+		if((aligner == "star")) { 
+			pid := par star(sample, readgroup, starRunMode, rgstring, outdir + "/" + aligner + "/tmp", infile, outfile, outdir + "/" + aligner, logfile, logdir, softwareConfig, refConfig)
+			pids.push(pid)
+		}
+
+	}
+
+	// wait until all rg.bam are printed
+	wait pids
+	// wait tids 
+
+	// for each sample, merge rg.bam as soon as these tasks finish
+	RunSampleAlnMerge(sample, rgs, aligner, refGenome, outfiles, mergedfile, outdir, logdir, softwareConfig)
+		
+	wait 
+	println info("RNAseq::03_Run_Alignment", "END | sm=$sample | aln=$aligner")
+}
+
+//------------- FUNCTION -------------//
+
+string[] RunSampleAlnMerge(string sample, string[] readgroups, string aligner, string refGenome, string[] infiles, string outfile, string outdir, string logdir, string softwareConfig) {
+
+	// initialize
+	string{} swParam = config(softwareConfig)
+	string modname = "RNAseq::03_Run_Alignment::RunSampleAlnMerge"
+	string rgTotal = readgroups.size()
+
+	// println info(modname, "START | sm=$sample | rgTotal=$rgTotal | aln=$aligner")
+
+	string[] tids
+	string[] tid
+	string infile
+	string logfile
+
+	// run start
+	if(rgTotal == 1) {
+		infile = infiles.head()
+		logfile = sample + "." + aligner + ".softlink.log"
+
+		if(! outfile.exists()) {  
+			infn := infile.split("/").pop()
+			task(cpus := 1, mem := 1 * M, ! outfile.exists()) {
+				sys echo "$sample::mergebam::link"
+				sys echo "Creating symbolic links for merged.bam file ..." > $logdir/$logfile
+				// sys ln -s $infile $outfile >& $logdir/$logfile
+				sys ln -s $infn $outfile >> $logdir/$logfile 2>&1
+				sys echo "...Done!" >> $logdir/$logfile
+				sys sleep $safeSleep
+			}
+		}
+
+		infile = infile + ".bai"
+		outfile = outfile + ".bai"
+		if(! outfile.exists()) { 
+			infn := infile.split("/").pop()
+			task(cpus := 1, mem := 1 * M, ! outfile.exists()) {
+				sys echo "$sample::mergebambai::link"
+				sys echo "Creating symbolic links for merged.bam.bai file ..." >> $logdir/$logfile
+				// sys ln -s $infile $outfile >> $logdir/$logfile 2>&1
+				sys ln -s $infn $outfile >> $logdir/$logfile 2>&1
+				sys echo "...Done!" >> $logdir/$logfile
+				sys sleep $safeSleep
+			}
+		}
+
+	}
+	else if(rgTotal >= 2) {
+		util := "MergeSamFiles"
+		logfile = sample + "." + aligner + ".sambamba_" + util + ".log"
+		tid = sambamba(sample, util, refGenome, '', outdir + "/tmp", infiles.join(","), outfile, outdir, logfile, logdir, softwareConfig)
+
+		tids += tid
+	}
+
+	wait 
+
+	// run end
+	// println info(modname, "END | sm=$sample | rgTotal=$rgTotal | aln=$aligner")
+
+
+	return tids
+}
+

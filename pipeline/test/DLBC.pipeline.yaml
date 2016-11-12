@@ -1,0 +1,159 @@
+---
+pipeline:
+  flags:
+    aligners:
+      run_star: 1
+    callers:
+      run_featurecounts: 1
+      run_rsem: 0
+      run_kallisto: 0
+    modules:
+      run_alignment: 1
+      run_alignment_filter: 0
+      run_check_qc: 1
+      run_clip_adapter: 0
+      run_collect_alignment_metrics: 1
+      run_collect_rnaseq_metrics: 1
+      run_fpkm: 0
+      run_generate_coverage: 1
+      run_merge_overlap_mates: 0
+      run_preprocessing: 0
+      run_quality_control: 1
+      run_readcount: 1
+      run_trim_read: 0
+  software:
+    main:
+      use_module: 0
+      adapter_pe: AGATCGGAAGAGCGGTTCAG,AGATCGGAAGAGCGTCGTGT
+      adapter_se: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTA
+      fastq_format: 33
+      genome_assembly: grch38
+      min_base_qual: 20
+      min_map_qual: 0
+      module_source: ~
+      ploidy: 2
+      qc_check: QUAL:30:50,NFD:0:10,GC:40:60,N:0:2
+      report_variants_pass: 1
+      rnaseq_lib_strand: reverse
+      threads: 4
+    bedtools:
+      exe: /home/ubuntu/software/bedtools-2.26.0/bin/bedtools
+      mem: 4
+      module: ~
+      threads: 1
+      ## Treat "split" BAM or BED12 entries as distinct BED intervals (rnaseq)
+      split: 1
+      scale: 1
+      scale_count: 50000000
+    fastqc:
+      exe: /home/ubuntu/software/fastqc-0.11.5/fastqc
+      mem: 4
+      module: ~
+      threads: 4
+    featurecounts:
+      exe: /home/ubuntu/software/subread-1.5.1/bin/featureCounts
+      mem: 4
+      module: ~
+      threads: 4
+      rnaseq_lib_strand: ~
+      min_map_qual: 255
+      anno_format: GTF
+      anno_feature: exon
+      anno_attribute: gene_id
+      count_junction: 1
+      count_primary: 1
+      count_properpair: 1
+      ## only applicable for PE reads
+      paired_end_fragment: 0
+    java:
+      exe: ~
+      module: ~
+    perl:
+      exe: ~
+      lib_path: ~
+      module: ~
+    picard:
+      ## for picard 2.0+, java 1.8 is required
+      exe: /home/ubuntu/software/picard-2.6.0/picard.jar
+      max_records_in_mem: 20000000
+      mem: 4
+      module: ~
+      threads: 4
+      assume_sorted: 1
+      validation_stringency: LENIENT
+      program: CollectAlignmentSummaryMetrics,CollectInsertSizeMetrics,QualityScoreDistribution,MeanQualityByCycle
+      rnaseq_lib_strand: NONE
+      metric_accumulation_level: SAMPLE
+    pigz:
+      exe: /home/ubuntu/software/pigz-2.3.4/pigz
+      mem: 2
+      module: ~
+      threads: 4
+    python:
+      exe: ~
+      lib_path: ~
+      module: ~
+    R:
+      exe: ~
+      module: ~ 
+    rseqc:
+      exe: ~
+      mem: 4
+      module: ~
+      threads: 1
+      sample_size: 200000
+    sambamba:
+      exe: /home/ubuntu/software/sambamba-0.6.4/sambamba
+      max_mem_per_thread: 1G
+      mem: 1
+      module: ~
+      threads: 4
+    samtools:
+      exe: /home/ubuntu/software/samtools-1.3.1/samtools
+      max_mem_per_thread: 1G
+      mem: 1
+      module: ~
+      threads: 4
+    star:
+      exe: /home/ubuntu/software/star-2.5.2b/bin/Linux_x86_64_static/STAR
+      mem: 6
+      module: ~
+      threads: 4
+      genome_load: NoSharedMemory
+      readFiles_command: zcat
+      out_sam_strand_field: intronMotif
+      out_filter_intron_motifs: RemoveNoncanonicalUnannotated
+      out_sam_type: BAM SortedByCoordinate
+    trimmomatic:
+      exe: /home/ubuntu/software/trimmomatic-0.36/trimmomatic-0.36.jar
+      mem: 4
+      module: ~
+      threads: 4
+      adapterfasta: /home/ubuntu/software/trimmomatic-0.36/adapters/TruSeq3-SE.fa
+      illuminaclip: "2:30:10"
+      leading: 5
+      minlen: 36
+      trailing: 5
+      slidingwindow: "4:15"
+    ucsc:
+      ## note this is the path to tool installation directory (not the tool itself)
+      exe: /home/ubuntu/software/UCSCtools
+      module: ~
+    util:
+      check_qc_exe: Check_QC.pl
+      mem: 8
+      path: /home/ubuntu/CRI-Workshop-AMIA-2016-RNAseq/pipeline/util
+  references:
+    grch38:
+      anno_bed: ~
+      anno_bed12: /home/ubuntu/data/reference/rnaseq/GRCh38.primary_Gencode24_50bp_chr11/gencode.v24.primary_assembly.annotation.chr11.bed12
+      anno_gtf: /home/ubuntu/data/reference/rnaseq/GRCh38.primary_Gencode24_50bp_chr11/gencode.v24.primary_assembly.annotation.chr11.gtf
+      anno_refflat: /home/ubuntu/data/reference/rnaseq/GRCh38.primary_Gencode24_50bp_chr11/gencode.v24.primary_assembly.annotation.chr11.refFlat.txt
+      anno_ribosome_rna_bed: /home/ubuntu/data/reference/rnaseq/GRCh38.primary_Gencode24_50bp_chr11/gencode.v24.primary_assembly.annotation.chr11.rRNA.bed
+      anno_ribosome_rna_interval: /home/ubuntu/data/reference/rnaseq/GRCh38.primary_Gencode24_50bp_chr11/gencode.v24.primary_assembly.annotation.chr11.rRNA.interval_list
+      chrom_size: /home/ubuntu/data/reference/rnaseq/GRCh38.primary_Gencode24_50bp_chr11/GRCh38.primary_assembly.genome.chr11.chrom.size
+      chrs: chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8,chr9,chr10,chr11,chr12,chr13,chr14,chr15,chr16,chr17,chr18,chr19,chr20,chr21,chr22,chrX,chrY,chrM
+      genome: /home/ubuntu/data/reference/rnaseq/GRCh38.primary_Gencode24_50bp_chr11/GRCh38.primary_assembly.genome.chr11.fa
+      genomedict: /home/ubuntu/data/reference/rnaseq/GRCh38.primary_Gencode24_50bp_chr11/GRCh38.primary_assembly.genome.chr11.dict
+      star_index: /home/ubuntu/data/reference/rnaseq/GRCh38.primary_Gencode24_50bp_chr11
+project: DLBC

@@ -1,0 +1,202 @@
+#!/usr/bin/env bds
+
+include "print.bds"
+include "getmem.bds"
+
+string[] bedtools(string sample, string util, string targetfile, string infile, string outfile, string outdir, string logfile, string logdir, string softwareConfig, string refConfig) {
+
+	// initialize
+	string{} swParam = config(softwareConfig)
+	string{} refParam = config(refConfig)
+	string[] modlist
+	string modname = "RNAseq::bedtools"
+	string bedtoolsExe
+	string sambambaExe
+	string ucscExe
+	string bedGraphToBigWigExe = 'bedGraphToBigWig'
+	string modsource
+	string modload = ""
+	string javaMaxMemStr = ""
+	int threads = 1
+	int memory = 1
+	int modFlag = 0
+
+	string[] tids
+	string tid
+	string[] infiles = infile.split(",")
+	string in1
+	string in2
+	string infileDep
+	string outfileBDG
+	string outfileScFactor
+	string inputString = ""
+	string chromSize
+	string splitParam = ''
+	int infileTotal
+	int maxRecordsInMem
+	int splitFlag = 0
+	int scaleFlag = 0
+	real scaleCount = 50000000.0
+	real scaleFactor = 1.0
+
+	// assign values
+	if(swParam.hasKey("java_module")) { modlist.push(swParam{"java_module"}) }
+	if(swParam.hasKey("main_module_source")) { modsource = swParam{"main_module_source"} }
+	if(swParam.hasKey("main_use_module")) { modFlag = swParam{"main_use_module"}.parseInt() }
+
+	if(swParam.hasKey("bedtools_exe")) { bedtoolsExe = swParam{"bedtools_exe"} }
+	if(swParam.hasKey("bedtools_module")) { modlist.push(swParam{"bedtools_module"}) }
+	if(swParam.hasKey("bedtools_threads")) { threads = swParam{"bedtools_threads"}.parseInt() }
+	if(swParam.hasKey("bedtools_mem")) { memory = swParam{"bedtools_mem"}.parseInt() }
+	if(swParam.hasKey("bedtools_split")) { splitFlag = swParam{"bedtools_split"}.parseInt() }
+	if(swParam.hasKey("bedtools_scale")) { scaleFlag = swParam{"bedtools_scale"}.parseInt() }
+	if(swParam.hasKey("bedtools_scale_count")) { scaleCount = swParam{"bedtools_scale_count"}.parseReal() }
+	
+	if(swParam.hasKey("sambamba_exe")) { sambambaExe = swParam{"sambamba_exe"} }
+	if(swParam.hasKey("sambamba_module")) { modlist.push(swParam{"sambamba_module"}) }
+	// the ucsc_exe is the path to the tool installation directory (not the tool itself)
+	if(swParam.hasKey("ucsc_exe")) { ucscExe = swParam{"ucsc_exe"} }
+	if(swParam.hasKey("ucsc_module")) { modlist.push(swParam{"ucsc_module"}) }
+
+	if(refParam.hasKey("grch38_chrom_size")) { chromSize = refParam{"grch38_chrom_size"} }
+	
+	if(modFlag == 1) {
+		if(modsource.length() > 0) { modload = ". $modsource; " }
+		for(string mod : modlist) { modload += "module load $mod; " }
+	} else { modload = '' }
+	
+	memory = getmem(memory * G, threads)	
+
+	if(ucscExe.length() > 0) {
+		bedGraphToBigWigExe = ucscExe + '/' + bedGraphToBigWigExe
+	}
+
+	infileTotal = infiles.size()
+	if(infileTotal == 2) { (in1, in2) = infiles }
+
+	if(splitFlag == 1) { splitParam = ' -split' }
+	
+	// println info(modname, "START | sm=$sample | util=$util | inTotal=$infileTotal")
+
+	// run start
+	if(! outdir.isDir()) { outdir.mkdir() }
+	if(! logdir.isDir()) { logdir.mkdir() }	
+
+	// merge bed files
+	if(util == "merge") {
+		if(infileTotal == 1) {
+			if(outfile <- infile) {
+				println info(modname, "task=run_copy | sm=$sample | run=1")
+				tid = task(outfile <- infile, cpus := threads, mem := memory) {
+					sys echo "$sample::copyfile"
+					sys cp -p $infile $outfile 2> $logdir/$logfile
+				}
+				tids.push(tid)
+			}
+			else {
+				println info(modname, "task=run_copy | sm=$sample | run=0")
+			}
+		}
+		else if(infileTotal >= 2 ) {
+			if(outfile <- infiles) {
+				println info(modname, "task=run_merge | sm=$sample | run=1")
+
+				catfile := outfile + ".cat.tmp"
+				for(string in : infiles) { inputString += " $in" }
+				
+				tid = task(outfile <- infiles, cpus := threads, mem := memory) {
+					sys echo "$sample::bedtools::$util"
+					sys $modload
+					sys cat $inputString > $catfile 2>> $logdir/$logfile
+					sys $bedtoolsExe sort -i $catfile | $bedtoolsExe $util -i stdin | $bedtoolsExe sort -i stdin > $outfile 2>> $logdir/$logfile
+					sys rm $catfile
+					sys sleep $safeSleep
+				}
+
+				tids.push(tid)
+			}
+			else {
+				println info(modname, "task=run_merge | sm=$sample | run=0")
+			}
+		}
+	}
+
+	// calculate exon cov
+	if((infileTotal == 1) && (util == "coverage")) {
+		if(outfile <- infile) {
+			println info(modname, "task=run_exonCov | sm=$sample | run=1")
+			
+			tid = task(outfile <- infile, cpus := threads, mem := memory, \
+				infile.length() > 0) {
+				sys echo "$sample::bedtools$util"
+				sys $modload
+				sys $bedtoolsExe $util -abam $infile -b $targetfile -hist | grep "^all" > $outfile 2> $logdir/$logfile
+				sys sleep $safeSleep
+			}
+
+			tids.push(tid)
+		}
+		else {
+			println info(modname, "task=run_exonCov | sm=$sample | run=0")
+		}
+		
+	}
+
+	// calculate genome cov
+	if((infileTotal == 1) && (util == "genomecov")) {
+		outfile += '.bw'
+		infileDep = infile 
+		if(outfile <- infile) {
+			println info(modname, "task=run_genomeCov | sm=$sample | run=1")
+			outfileBDG = outfile.replace('.bw', '.bdg')
+
+			// calculate scaling factor 
+			if(scaleFlag == 1) {
+				outfileScFactor = outfile.replace('.bw', '.scaleFactor')
+				infileDep = outfileScFactor
+
+				tid = task(infileDep <- infile, cpus := threads, mem := memory, \
+				infile.length() > 0) {
+					sys echo "$sample::bedtools$util:calcScaleFactor"
+					sys $modload
+					sys $sambambaExe view -t $threads -c -f bam -F "mapping_quality == 255" $infile | awk -v c=$scaleCount '{print c/$1}' > $outfileScFactor 2>> $logdir/$logfile
+					sys sleep $safeSleep
+				}
+
+				tids.push(tid)
+			}
+
+			// calculate coverage
+			if(outfile <- infileDep) {
+				if(scaleFlag == 1) {
+					wait tid
+					scaleFactor = outfileScFactor.read().trim().parseReal()
+					println "scaleFactor = $scaleFactor"
+				}
+
+				tid = task(outfile <- infileDep, cpus := threads, mem := memory, \
+					infileDep.length() > 0) {
+					sys echo "$sample::bedtools$util"
+					sys $modload
+					sys echo "Running bedtools to collect genome coverage bedgraph ... " > $logdir/$logfile
+					sys $bedtoolsExe $util -bga $splitParam -ibam $infile -scale $scaleFactor > $outfileBDG 2>> $logdir/$logfile
+					sys echo "Converting bedgraph to bigwig ... " >> $logdir/$logfile
+					sys $bedGraphToBigWigExe $outfileBDG $chromSize $outfile >> $logdir/$logfile 2>&1
+					sys echo "Done!" >> $logdir/$logfile
+					sys sleep $safeSleep
+				}
+
+				tids.push(tid)
+			}
+		}
+		else {
+			println info(modname, "task=run_genomeCov | sm=$sample | run=0")
+		}
+		
+	}	
+
+	// println info(modname, "END | sm=$sample | util=$util | inTotal=$infileTotal")
+
+	return tids
+}
+

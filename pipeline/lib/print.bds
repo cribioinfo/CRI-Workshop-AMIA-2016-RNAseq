@@ -1,0 +1,52 @@
+#!/usr/bin/env bds
+
+include "getmem.bds"
+
+##------------ Print info --------------##
+
+string info(string modname, string message) {
+	// string time = sys date +"%m-%d-%Y %H:%M:%S"
+	// string infoLine = "[INFO] [" + modname + "] [" + time + " ] " + message
+	string infoLine = "[INFO] [" + modname + "] " + message
+	return(infoLine) 
+}
+
+
+##------------ Print header --------------##
+
+# descFile := "desc.conf"
+# desc := config(descFile) 
+# # script := "Run_QualityControl.bds"
+# # println desc{script}
+# string printHeader(string name, string script, string usage, string[] args) {
+	# string argString = args.join(" ")
+	# println info(name, "-" * 80) 
+	# println info(name, script, desc{script}) 
+	# println info(name, "Center for Research Informatics, University of Chicago") 
+	# println info(name, "Riyue Bao, 2014") 
+	# println info(name, "Program args: $argString") 
+	# println info(name, "-" * 80) 
+	# return script
+# }
+
+##------------ Print map --------------##
+
+string{} printMap (string{} map) {
+	for (string key : map.keys().sort() ) {
+		println key + " => " + map{key}
+	}
+
+	return map
+}
+
+##------------ Print array --------------##
+
+string[] printArray (string[] array) {
+	for (string key : array.sort() ) {
+		println key
+	}
+
+	return array
+}
+
+

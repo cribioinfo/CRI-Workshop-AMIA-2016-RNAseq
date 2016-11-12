@@ -1,0 +1,156 @@
+#!/usr/bin/env bds
+
+include "print.bds"
+include "getmem.bds"
+
+string[] rseqc(string sample, string util, string tmpdir, string infile, string outfile, string outdir, string logfile, string logdir, string softwareConfig, string refConfig) {
+
+	// initialize
+	string{} swParam = config(softwareConfig)
+	string{} refParam = config(refConfig)
+	string[] modlist
+	string modname = "RNAseq::rseqc"
+	string rseqcExe
+	string samtoolsExe
+	string modsource
+	string modload = ""
+	string javaMaxMemStr = ""
+	int threads = 1
+	int memory = 1
+	int modFlag = 0
+
+	string[] tids
+	string tid
+	string[] chrs
+	string[] programs
+	string paramString = ''
+	string refGenome
+	string refGenomeDict
+	string annoBed
+	string annoBed12
+	string annoGtf
+	string annoRefflat 
+	string annoRibosomeRNABed
+	string annoRibosomeRNAinterval
+	string chromSize
+	string chrom
+	int sampleSize = 200000
+
+	// assign values
+	if(swParam.hasKey("java_module")) { modlist.push(swParam{"java_module"}) }
+	if(swParam.hasKey("main_module_source")) { modsource = swParam{"main_module_source"} }
+	if(swParam.hasKey("main_use_module")) { modFlag = swParam{"main_use_module"}.parseInt() }
+	if(swParam.hasKey("rseqc_exe")) { rseqcExe = swParam{"rseqc_exe"} }
+	if(swParam.hasKey("rseqc_module")) { modlist.push(swParam{"rseqc_module"}) }
+	if(swParam.hasKey("rseqc_threads")) { threads = swParam{"rseqc_threads"}.parseInt() }
+	if(swParam.hasKey("rseqc_mem")) { memory = swParam{"rseqc_mem"}.parseInt() }
+	if(swParam.hasKey("rseqc_sample_size")) { memory = swParam{"rseqc_sample_size"}.parseInt() }
+
+	// prepare R environment for plotting 
+	if(swParam.hasKey("R_module")) { modlist.push(swParam{"R_module"}) }
+
+	if(refParam.hasKey("grch38_genome")) { refGenome = refParam{"grch38_genome"} }
+	if(refParam.hasKey("grch38_genomedict")) { refGenomeDict = refParam{"grch38_genomedict"} }
+	if(refParam.hasKey("grch38_chrs")) { chrs = refParam{"grch38_chrs"}.split(",") }
+	if(refParam.hasKey("grch38_anno_bed")) { annoBed = refParam{"grch38_anno_bed"} }
+	if(refParam.hasKey("grch38_anno_bed12")) { annoBed12 = refParam{"grch38_anno_bed12"} }
+	if(refParam.hasKey("grch38_anno_gtf")) { annoGtf = refParam{"grch38_anno_gtf"} }
+	if(refParam.hasKey("grch38_anno_refflat")) { annoRefflat = refParam{"grch38_anno_refflat"} }
+	if(refParam.hasKey("grch38_anno_ribosome_rna_bed")) { annoRibosomeRNABed = refParam{"grch38_anno_ribosome_rna_bed"} }
+	if(refParam.hasKey("grch38_anno_ribosome_rna_interval")) { annoRibosomeRNAinterval = refParam{"grch38_anno_ribosome_rna_interval"} }
+	if(refParam.hasKey("grch38_chrom_size")) { chromSize = refParam{"grch38_chrom_size"} }
+
+	if(modFlag == 1) {
+		if(modsource.length() > 0) { modload = ". $modsource; " }
+		for(string mod : modlist) { modload += "module load $mod; " }
+	} else { modload = '' }
+	
+	javaMaxMemStr = " -Xmx$memory" + "G"  // note java must have the total memory
+	memory = getmem((memory+1) * G, threads)  // get per slot mem for task (SGE only)
+	
+	// println info(modname, "START | sm=$sample | util=$util | bamTotal=$infileTotal")
+
+	// run start
+	if(! outdir.isDir()) { outdir.mkdir() }
+	if(! logdir.isDir()) { logdir.mkdir() }	
+	if(! tmpdir.isDir()) { tmpdir.mkdir() }
+
+	if(util == 'clipping_profile') {
+		if(outfile + '.clipping_profile.xls' <- infile) {
+			println info(modname, "task=run_" + util + " | run=1")
+
+			tid = task(outfile + '.clipping_profile.xls' <- infile, \
+				cpus := threads, mem := memory) {
+				sys echo "$sample::rseqc::$util"
+				sys $modload
+				sys $util.py -i $infile -o $outfile >& $logdir/$logfile 
+				sys sleep $safeSleep
+			}
+
+			tids.push(tid)
+		}
+		else {
+			println info(modname,  "task=run_" + util + " | run=0")
+		}
+	}
+		
+	if(util == 'infer_experiment') {
+		outfile += '.infer_experiment'
+		if(outfile <- infile) {
+			println info(modname, "task=run_" + util + " | run=1")
+			tid = task(outfile <- infile, \
+				cpus := threads, mem := memory) {
+				sys echo "$sample::rseqc::$util"
+				sys $modload
+				sys $util.py -i $infile -r $annoBed12 -s $sampleSize > $outfile 2> $logdir/$logfile
+				sys sleep $safeSleep
+			}
+
+			tids.push(tid)
+		}
+		else {
+			println info(modname,  "task=run_" + util + " | run=0")
+		}
+	}
+
+	if(util == 'geneBody_coverage') {
+		if(outfile <- infile) {
+			println info(modname, "task=run_" + util + " | run=1")
+			tid = task(outfile <- infile, \
+				cpus := threads, mem := memory) {
+				sys echo "$sample::rseqc::$util"
+				sys $modload
+				sys $util.py -i $infile -r $annoBed12 -o $outfile >& $logdir/$logfile
+				sys sleep $safeSleep
+			}
+
+			tids.push(tid)
+		}
+		else {
+			println info(modname,  "task=run_" + util + " | run=0")
+		}
+	}
+
+	if(util == 'RPKM_saturation') {
+		if(outfile <- infile) {
+			println info(modname, "task=run_" + util + " | run=1")
+			tid = task(outfile <- infile, \
+				cpus := threads, mem := memory) {
+				sys echo "$sample::rseqc::$util"
+				sys $modload
+				sys $util.py -i $infile -o $outfile -r $annoBed12 -c 0.01 >& $logdir/$logfile
+				sys sleep $safeSleep
+			}
+
+			tids.push(tid)
+		}
+		else {
+			println info(modname,  "task=run_" + util + " | run=0")
+		}
+	}
+
+	// println info(modname, "END | sm=$sample | util=$util | bamTotal=$infileTotal")
+
+	return tids
+}
+

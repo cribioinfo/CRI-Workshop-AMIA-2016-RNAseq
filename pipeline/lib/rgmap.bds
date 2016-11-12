@@ -1,0 +1,23 @@
+#!/usr/bin/env bds
+
+include "print.bds"
+include "getmem.bds"
+
+// infile is the format of sample.qc_flag.tsv
+// build a hash of failed/passed reagroups/samples
+
+string{} BuildRGmap(string infile, string tag, string flag) {
+
+	string{} rgmap 
+	string[] lines = infile.readLines()
+
+	for(string line : lines) {
+		array := line.split("\t")
+		field3 := array.pop()
+		field2 := array.pop()
+		field1 := array.pop()
+		if((field1 == tag) && (field3 == flag)) { rgmap{field2} = "" }
+	}
+
+	return rgmap
+}

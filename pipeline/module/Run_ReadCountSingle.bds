@@ -1,0 +1,81 @@
+#!/usr/bin/env bds
+
+void Run_ReadCountSingle(string sample, string aligner, string caller, string projdir, string sampleConfig, string flagConfig, string refConfig, string softwareConfig) {
+
+	println info("RNAseq::04_Run_ReadCountSingle", "START | sm=$sample | aln=$aligner | clr=$caller")
+
+	//------------- INCLUDE -------------//
+
+	include "../lib/print.bds"
+	include "../lib/rgmap.bds"
+	include '../lib/featurecounts.bds'
+
+	//sys source "config/module.rc"
+
+	//------------- MAIN -------------//
+
+	// initialize
+	string{} smParam = config(sampleConfig)
+	string{} flagParam = config(flagConfig)
+	string{} refParam = config(refConfig)
+	string{} swParam = config(softwareConfig)
+	string{} smFailMap	
+	string[] tids
+	string[] tid
+	string infile
+	string outfile
+	string resultdir
+	string outdir
+	string logdir
+	string logfile
+	string flagfile
+	int paired = 0
+	int forceIn = 0
+
+	// assign values
+	if(smParam.hasKey("paired")) { paired = smParam{"paired"}.parseInt() }
+	if(smParam.hasKey("star_alnfile")) { infile = smParam{"star_alnfile"}}
+	if(smParam.hasKey("star_featurecounts_varfile")) { outfile = smParam{"star_featurecounts_varfile"} }
+	if(smParam.hasKey("sample_result_dir")) { resultdir = smParam{"sample_result_dir"} }
+	if(smParam.hasKey("sample_log_dir")) { logdir = smParam{"sample_log_dir"} }
+	if(smParam.hasKey("qc_flagfile")) { smFailMap = BuildRGmap(smParam{"qc_flagfile"}, "SM", "FAIL") }
+	if(smParam.hasKey("force_include")) { forceIn = smParam{"force_include"}.parseInt() }
+	
+	outdir = resultdir + "/read_counts"
+
+	if(! resultdir.exists()) { resultdir.mkdir() }
+	if(! outdir.exists()) { outdir.mkdir() }
+	if((caller != "SplitCollableLoci") && (! "$outdir/$caller".exists())) { "$outdir/$caller".mkdir() }
+
+	flagfile = resultdir + "/sample.exclude"
+
+	// check whethe this rg passes QC
+	if(forceIn == 1) {
+			if(flagfile.exists()) { flagfile.delete() }
+		}
+	else if(forceIn == 0) {
+		if((sample == "") || (smFailMap.hasKey("$sample"))) { 
+			println info("RNAseq::04_Run_ReadCountSingle", "sm=$sample | aln=$aligner | clr=$caller | QC failed! Skip")
+			return
+		}
+	}
+
+	// if(splitByBin) { printArray(binfiles) }
+	// println "Run_ReadCountSingle: \n-- $sample: $caller \n-- splitByBin = $splitByBin \n-- target = $target"
+
+	// run start 
+	// run featureCounts
+	if(caller == "featurecounts") {
+		logfile = sample + "." + aligner + "." + caller + ".log"
+		tid = featurecounts(sample, paired, outdir + "/tmp", infile, outfile, outdir, logfile, logdir, softwareConfig, refConfig) 
+
+		tids += tid
+	}
+	
+	wait
+
+	// run end
+	println info("RNAseq::04_Run_ReadCountSingle", "END | sm=$sample | aln=$aligner | clr=$caller")
+
+}
+

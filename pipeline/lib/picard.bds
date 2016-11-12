@@ -1,0 +1,189 @@
+#!/usr/bin/env bds
+
+include "print.bds"
+include "getmem.bds"
+
+string[] picard(string sample, string util, string tmpdir, string infile, string outfile, string outdir, string logfile, string logdir, string softwareConfig, string refConfig) {
+
+	//include "java.bds"
+	baseJava := "java -XX:ParallelGCThreads=2 "
+	
+	// initialize
+	string{} swParam = config(softwareConfig)
+	string{} refParam = config(refConfig)
+	string[] modlist
+	string modname = "RNAseq::picard"
+	string picardExe
+	string samtoolsExe
+	string modsource
+	string modload = ""
+	string javaMaxMemStr = ""
+	int threads = 1
+	int memory = 1
+	int modFlag = 0
+
+	string[] tids
+	string tid
+	string[] infiles = infile.split(",")
+	string[] chrs
+	string[] programs
+	string inputString
+	string paramString = ''
+	string refGenome
+	string refGenomeDict
+	string annoBed
+	string annoBed12
+	string annoGtf
+	string annoRefflat 
+	string annoRibosomeRNABed
+	string annoRibosomeRNAinterval
+	string chromSize
+	string chrom
+	string validationStringency = 'LENIENT'
+	string rnaseqLibStrand = 'NONE'
+	string metricAccumulationLevel = 'SAMPLE'
+	int infileTotal
+	int maxRecordsInMem = 500000
+	int assumeSortedFlag = 1
+
+	// assign values
+	if(swParam.hasKey("java_module")) { modlist.push(swParam{"java_module"}) }
+	if(swParam.hasKey("main_module_source")) { modsource = swParam{"main_module_source"} }
+	if(swParam.hasKey("main_use_module")) { modFlag = swParam{"main_use_module"}.parseInt() }
+	if(swParam.hasKey("picard_exe")) { picardExe = swParam{"picard_exe"} }
+	if(swParam.hasKey("picard_module")) { modlist.push(swParam{"picard_module"}) }
+	if(swParam.hasKey("picard_threads")) { threads = swParam{"picard_threads"}.parseInt() }
+	if(swParam.hasKey("picard_mem")) { memory = swParam{"picard_mem"}.parseInt() }
+	if(swParam.hasKey("picard_max_records_in_mem")) { maxRecordsInMem = swParam{"picard_max_records_in_mem"}.parseInt() }
+
+	if(swParam.hasKey("picard_assume_sorted")) { assumeSortedFlag = swParam{"picard_assume_sorted"}.parseInt() }
+	if(swParam.hasKey("picard_validation_stringency")) { validationStringency = swParam{"picard_validation_stringency"} }
+		if(swParam.hasKey("picard_program")) { programs = swParam{"picard_program"}.split(',') }
+	if(swParam.hasKey("picard_rnaseq_lib_strand")) { rnaseqLibStrand = swParam{"picard_rnaseq_lib_strand"} }
+	if(swParam.hasKey("picard_metric_accumulation_level")) { metricAccumulationLevel = swParam{"picard_metric_accumulation_level"} }
+
+	if(swParam.hasKey("samtools_exe")) { samtoolsExe = swParam{"samtools_exe"} }
+	if(swParam.hasKey("samtools_module")) { modlist.push(swParam{"samtools_module"}) }
+
+	// prepare R environment for plotting 
+	if(swParam.hasKey("R_module")) { modlist.push(swParam{"R_module"}) }
+
+	if(refParam.hasKey("grch38_genome")) { refGenome = refParam{"grch38_genome"} }
+	if(refParam.hasKey("grch38_genomedict")) { refGenomeDict = refParam{"grch38_genomedict"} }
+	if(refParam.hasKey("grch38_chrs")) { chrs = refParam{"grch38_chrs"}.split(",") }
+	if(refParam.hasKey("grch38_anno_bed")) { annoBed = refParam{"grch38_anno_bed"} }
+	if(refParam.hasKey("grch38_anno_bed12")) { annoBed12 = refParam{"grch38_anno_bed12"} }
+	if(refParam.hasKey("grch38_anno_gtf")) { annoGtf = refParam{"grch38_anno_gtf"} }
+	if(refParam.hasKey("grch38_anno_refflat")) { annoRefflat = refParam{"grch38_anno_refflat"} }
+	if(refParam.hasKey("grch38_anno_ribosome_rna_bed")) { annoRibosomeRNABed = refParam{"grch38_anno_ribosome_rna_bed"} }
+	if(refParam.hasKey("grch38_anno_ribosome_rna_interval")) { annoRibosomeRNAinterval = refParam{"grch38_anno_ribosome_rna_interval"} }
+	if(refParam.hasKey("grch38_chrom_size")) { chromSize = refParam{"grch38_chrom_size"} }
+
+	if(modFlag == 1) {
+		if(modsource.length() > 0) { modload = ". $modsource; " }
+		for(string mod : modlist) { modload += "module load $mod; " }
+	} else { modload = '' }
+	
+	javaMaxMemStr = " -Xmx$memory" + "G"  // note java must have the total memory
+	memory = getmem((memory+1) * G, threads)  // get per slot mem for task (SGE only)
+
+	infileTotal = infiles.size()
+	for(string in : infiles) { inputString += " I=$in" }
+	
+	// println info(modname, "START | sm=$sample | util=$util | bamTotal=$infileTotal")
+
+	// run start
+	if(! outdir.isDir()) { outdir.mkdir() }
+	if(! logdir.isDir()) { logdir.mkdir() }	
+	if(! tmpdir.isDir()) { tmpdir.mkdir() }
+
+	// merge bam files
+	if((infileTotal >= 2) && (util == "MergeSamFiles")) {
+		if(outfile <- infiles) {
+			println info(modname, "task=run_mergeBam | run=1")
+			tid = task(outfile + ".bai" <- infiles, cpus := threads, mem := memory, \
+				inputString != "") {
+				sys echo "$sample::picard::$util"
+				sys $modload
+				// updated to picard 2.0 or above syntax (require java 1.8)
+				sys $baseJava $javaMaxMemStr -jar $picardExe $util $inputString O=$outfile TMP_DIR=$tmpdir SO=coordinate AS=true VALIDATION_STRINGENCY=LENIENT MAX_RECORDS_IN_RAM=$maxRecordsInMem >& $logdir/$logfile
+				sys $samtoolsExe index $outfile >> $logdir/$logfile 2>&1
+				sys sleep $safeSleep
+			}
+
+			tids.push(tid)
+		}
+		else {
+			println info(modname, "task=run_mergeBam | run=0")
+		}
+
+	}
+
+	// mark dups
+	if((infileTotal == 1) && (util == "MarkDuplicates")) {
+		if(outfile <- infiles) {
+			println info(modname, "task=run_markDups | run=1")
+			tid = task(outfile + ".bai" <- infiles, cpus := threads, mem := memory, \
+				inputString != "") {
+				sys echo "$sample::picard::$util"
+				sys $modload
+				sys $baseJava $javaMaxMemStr -jar $picardExe $util $inputString O=$outfile METRICS_FILE=$outfile.metrics REMOVE_DUPLICATES=true TMP_DIR=$tmpdir AS=true VALIDATION_STRINGENCY=LENIENT PG=null MAX_RECORDS_IN_RAM=$maxRecordsInMem >& $logdir/$logfile
+				sys $samtoolsExe index $outfile >> $logdir/$logfile 2>&1
+				sys $samtoolsExe flagstat $outfile > $outfile.flagstat 2>> $logdir/$logfile	
+				sys sleep $safeSleep
+			}
+
+			tids.push(tid)
+		}
+		else {
+			println info(modname, "task=run_markDups | run=0")
+		}
+		
+	}
+
+	// collect multi metrics
+	if((infileTotal == 1) && (util == "CollectMultipleMetrics")) {
+		if(outfile + ".alignment_summary_metrics" <- infiles) {
+			println info(modname, "task=run_collectMultiMetrics | run=1")
+			tid = task(outfile + ".alignment_summary_metrics" <- infiles, cpus := threads, mem := memory, \
+				inputString != "") {
+				sys echo "$sample::picard::$util"
+				sys $modload
+				sys $baseJava $javaMaxMemStr -jar $picardExe $util $inputString O=$outfile R=$refGenome PROGRAM=CollectAlignmentSummaryMetrics PROGRAM=CollectInsertSizeMetrics PROGRAM=QualityScoreDistribution PROGRAM=MeanQualityByCycle TMP_DIR=$tmpdir VALIDATION_STRINGENCY=LENIENT MAX_RECORDS_IN_RAM=$maxRecordsInMem >& $logdir/$logfile
+				sys sleep $safeSleep				
+			}
+
+			tids.push(tid)
+		}
+		else {
+			println info(modname, "task=run_collectMultiMetrics | run=0")
+		}
+		
+	}
+
+	// collect rnaseq metrics
+	if((infileTotal == 1) && (util == "CollectRnaSeqMetrics")) {
+		outfile += ".rnaseq_metrics"
+		if(outfile <- infiles) {
+			println info(modname, "task=run_collectRnaSeqMetrics | run=1")
+			tid = task(outfile <- infiles, cpus := threads, mem := memory, \
+				inputString != "") {
+				sys echo "$sample::picard::$util"
+				sys $modload
+				sys $baseJava $javaMaxMemStr -jar $picardExe $util $inputString O=$outfile REF_FLAT=$annoRefflat RIBOSOMAL_INTERVALS=$annoRibosomeRNAinterval STRAND=$rnaseqLibStrand CHART=$outfile.pdf METRIC_ACCUMULATION_LEVEL=SAMPLE TMP_DIR=$tmpdir  VALIDATION_STRINGENCY=LENIENT MAX_RECORDS_IN_RAM=$maxRecordsInMem >& $logdir/$logfile 
+				sys sleep $safeSleep				
+			}
+
+			tids.push(tid)
+		}
+		else {
+			println info(modname, "task=run_collectRnaSeqMetrics | run=0")
+		}
+		
+	}	
+
+	// println info(modname, "END | sm=$sample | util=$util | bamTotal=$infileTotal")
+
+	return tids
+}
+

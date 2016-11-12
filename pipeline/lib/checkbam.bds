@@ -1,0 +1,47 @@
+#!/usr/bin/env bds
+
+include "print.bds"
+include "getmem.bds"
+
+int CheckBAM(string infile, string modsource, string[] modlist, int modFlag, int threads, string sambambaExe) {
+
+	string modload = ""
+	string outfile = infile + ".readTotal"
+	string tid
+	int memory = 1
+	int readTotal = 0
+
+	if(modFlag == 1) {
+		if(modsource.length() > 0) { modload = ". $modsource; " }
+		for(string mod : modlist) { modload += "module load $mod; " }
+	} else { modload = '' }
+	
+	memory = getmem(memory * G, threads)
+
+	// note that although I do modload here, the environment setting does not apply to the next sys
+	// you will receive error "sambamba command not found!"
+	// sys $modload
+	// readTotal = sys $sambambaExe view $infile | wc -l
+
+	// note that we can't not include infile.exists() because it will depend on (outfile <- infile)
+	// two conditions are not mutually exclusive
+	if(infile.exists()) {
+		// println "task=run_checkbam | infile exists | infile=$infile"
+		tid = task(outfile <- infile, cpus := threads, mem := memory) {
+			sys echo "checkbam"
+			sys $modload
+			sys $sambambaExe view -t $threads $infile | wc -l > $outfile
+			sys sleep $safeSleep
+		}
+		
+		wait tid 
+
+		if(outfile.exists()) { readTotal = outfile.readLines().head().parseInt() }
+	}
+	else {
+		// println "task=run_checkbam | infile does not exist | infile=$infile"
+	}
+	// println "CheckBAM: readTotal = $readTotal"
+
+	return readTotal
+}

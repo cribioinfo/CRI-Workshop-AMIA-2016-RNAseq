@@ -1,0 +1,25 @@
+Module	Section	Sample Name	Source
+FastQC	all_sections	home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205283	/home/ubuntu/data/rnaseq/fullset/fastqc/SRR1205283_fastqc.zip
+FastQC	all_sections	home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205282	/home/ubuntu/data/rnaseq/fullset/fastqc/SRR1205282_fastqc.zip
+FastQC	all_sections	home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205285	/home/ubuntu/data/rnaseq/fullset/fastqc/SRR1205285_fastqc.zip
+FastQC	all_sections	home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205284	/home/ubuntu/data/rnaseq/fullset/fastqc/SRR1205284_fastqc.zip
+FastQC	all_sections	home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205287	/home/ubuntu/data/rnaseq/fullset/fastqc/SRR1205287_fastqc.zip
+FastQC	all_sections	home | ubuntu | data | rnaseq | fullset | fastqc | SRR1205286	/home/ubuntu/data/rnaseq/fullset/fastqc/SRR1205286_fastqc.zip
+Picard	RnaSeqMetrics	home | ubuntu | data | rnaseq | fullset | picard | KO01.star	/home/ubuntu/data/rnaseq/fullset/picard/KO01.star.merged.bam.rnaseq_metrics
+Picard	RnaSeqMetrics	home | ubuntu | data | rnaseq | fullset | picard | KO02.star	/home/ubuntu/data/rnaseq/fullset/picard/KO02.star.merged.bam.rnaseq_metrics
+Picard	RnaSeqMetrics	home | ubuntu | data | rnaseq | fullset | picard | KO03.star	/home/ubuntu/data/rnaseq/fullset/picard/KO03.star.merged.bam.rnaseq_metrics
+Picard	RnaSeqMetrics	home | ubuntu | data | rnaseq | fullset | picard | WT03.star	/home/ubuntu/data/rnaseq/fullset/picard/WT03.star.merged.bam.rnaseq_metrics
+Picard	RnaSeqMetrics	home | ubuntu | data | rnaseq | fullset | picard | WT02.star	/home/ubuntu/data/rnaseq/fullset/picard/WT02.star.merged.bam.rnaseq_metrics
+Picard	RnaSeqMetrics	home | ubuntu | data | rnaseq | fullset | picard | WT01.star	/home/ubuntu/data/rnaseq/fullset/picard/WT01.star.merged.bam.rnaseq_metrics
+Picard	BaseDistributionByCycle	home | ubuntu | data | rnaseq | fullset | picard | KO01.star	/home/ubuntu/data/rnaseq/fullset/picard/KO01.star.merged.bam.base_distribution_by_cycle_metrics
+Picard	BaseDistributionByCycle	home | ubuntu | data | rnaseq | fullset | picard | KO02.star	/home/ubuntu/data/rnaseq/fullset/picard/KO02.star.merged.bam.base_distribution_by_cycle_metrics
+Picard	BaseDistributionByCycle	home | ubuntu | data | rnaseq | fullset | picard | KO03.star	/home/ubuntu/data/rnaseq/fullset/picard/KO03.star.merged.bam.base_distribution_by_cycle_metrics
+Picard	BaseDistributionByCycle	home | ubuntu | data | rnaseq | fullset | picard | WT03.star	/home/ubuntu/data/rnaseq/fullset/picard/WT03.star.merged.bam.base_distribution_by_cycle_metrics
+Picard	BaseDistributionByCycle	home | ubuntu | data | rnaseq | fullset | picard | WT02.star	/home/ubuntu/data/rnaseq/fullset/picard/WT02.star.merged.bam.base_distribution_by_cycle_metrics
+Picard	BaseDistributionByCycle	home | ubuntu | data | rnaseq | fullset | picard | WT01.star	/home/ubuntu/data/rnaseq/fullset/picard/WT01.star.merged.bam.base_distribution_by_cycle_metrics
+RSeQC	infer_experiment	home | ubuntu | data | rnaseq | fullset | rseqc | WT01.star	/home/ubuntu/data/rnaseq/fullset/rseqc/WT01.star.merged.bam.infer_experiment
+RSeQC	infer_experiment	home | ubuntu | data | rnaseq | fullset | rseqc | KO03.star	/home/ubuntu/data/rnaseq/fullset/rseqc/KO03.star.merged.bam.infer_experiment
+RSeQC	infer_experiment	home | ubuntu | data | rnaseq | fullset | rseqc | KO02.star	/home/ubuntu/data/rnaseq/fullset/rseqc/KO02.star.merged.bam.infer_experiment
+RSeQC	infer_experiment	home | ubuntu | data | rnaseq | fullset | rseqc | KO01.star	/home/ubuntu/data/rnaseq/fullset/rseqc/KO01.star.merged.bam.infer_experiment
+RSeQC	infer_experiment	home | ubuntu | data | rnaseq | fullset | rseqc | WT03.star	/home/ubuntu/data/rnaseq/fullset/rseqc/WT03.star.merged.bam.infer_experiment
+RSeQC	infer_experiment	home | ubuntu | data | rnaseq | fullset | rseqc | WT02.star	/home/ubuntu/data/rnaseq/fullset/rseqc/WT02.star.merged.bam.infer_experiment

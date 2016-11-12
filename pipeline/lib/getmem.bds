@@ -1,0 +1,19 @@
+#!/usr/bin/env bds
+
+// Set up per slot memory for each task in BDS
+// In configuration file, mem is the total size (in gigabytes)
+// On SGE, job memory setting (mem_free) is per slot
+// We need to devide the total mem by the number of threads
+// memory  - total memory * G
+// threads - number of threads 
+// returns - per slot memory in bytes 
+int getmem(int memory, int threads) {
+    
+    int memPerSlot = memory
+    
+    if( system == "sge" ) {
+        memPerSlot = memory / threads
+    }
+
+    return memPerSlot
+}

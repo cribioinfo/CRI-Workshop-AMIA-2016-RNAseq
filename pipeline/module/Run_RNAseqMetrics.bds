@@ -1,0 +1,112 @@
+#!/usr/bin/env bds
+
+void Run_RNAseqMetrics(string sample, string aligner, string metric, string projdir, string sampleConfig, string flagConfig, string refConfig, string softwareConfig) {
+
+	println info("RNAseq::05_Run_RNAseqMetrics", "START | sm=$sample | aln=$aligner | mts=$metric")
+
+	//------------- INCLUDE -------------//
+
+	include "../lib/print.bds"
+	include "../lib/rgmap.bds"
+	include '../lib/bedtools.bds'
+	include '../lib/picard.bds'
+	include '../lib/rseqc.bds'
+
+	//sys source "config/module.rc"
+
+	//------------- MAIN -------------//
+
+	// initialize
+	string{} smParam = config(sampleConfig)
+	string{} flagParam = config(flagConfig)
+	string{} refParam = config(refConfig)
+	string{} swParam = config(softwareConfig)
+	string{} smFailMap	
+	string[] tids
+	string[] tid
+	string[] picardUtils = ["CollectRnaSeqMetrics", "CollectMultipleMetrics"]
+	// 'clipping_profile' added one mendatory option [-s] to indicate SE or PE. This option does not exist in v2.6 or earlier. bds will die if running with older version.
+	// string[] rseqcUtils = ['clipping_profile', 'infer_experiment']
+	string[] rseqcUtils = ['infer_experiment']
+	string[] bedtoolsUtils = ['genomecov']
+	string infile
+	string outfile
+	string resultdir
+	string outdir
+	string logdir
+	string logfile
+	string flagfile
+	string targetfile = ''
+	int paired = 0
+	int forceIn = 0
+
+	// assign values
+	if(smParam.hasKey("paired")) { paired = smParam{"paired"}.parseInt() }
+	if(smParam.hasKey("star_alnfile")) { infile = smParam{"star_alnfile"}}
+	if(smParam.hasKey("sample_result_dir")) { resultdir = smParam{"sample_result_dir"} }
+	if(smParam.hasKey("sample_log_dir")) { logdir = smParam{"sample_log_dir"} }
+	if(smParam.hasKey("qc_flagfile")) { smFailMap = BuildRGmap(smParam{"qc_flagfile"}, "SM", "FAIL") }
+	if(smParam.hasKey("force_include")) { forceIn = smParam{"force_include"}.parseInt() }
+	
+	outdir = resultdir + "/alignment_metrics/" + metric
+
+	if(! resultdir.exists()) { resultdir.mkdir() }
+	if(! outdir.exists()) { outdir.mkdir() }
+
+	flagfile = resultdir + "/sample.exclude"
+
+	// check whether this rg passes QC
+	if(forceIn == 1) {
+			if(flagfile.exists()) { flagfile.delete() }
+		}
+	else if(forceIn == 0) {
+		if((sample == "") || (smFailMap.hasKey("$sample"))) { 
+			println info("RNAseq::05_Run_RNAseqMetrics", "sm=$sample | aln=$aligner | mts=$metric | QC failed! Skip")
+			return
+		}
+	}
+
+	// run start 
+	// run picard collect metrics
+	if(metric == "picard") {
+		for( string util : picardUtils ) {
+			outfile = infile.replace('/alignment/', '/alignment_metrics/' + metric + '/')
+			logfile = sample + "." + aligner + "." + metric +  '.' + util + ".log"
+			tid = picard(sample, util, outdir + "/tmp", infile, outfile, outdir, logfile, logdir, softwareConfig, refConfig)
+
+			tids += tid
+		}
+		
+	}
+
+	// run rseqc collect metrics
+	if(metric == "rseqc") {
+		for( string util : rseqcUtils ) {
+			outfile = infile.replace('/alignment/', '/alignment_metrics/' + metric + '/')
+			logfile = sample + "." + aligner + "." + metric +  '.' + util + ".log"
+			tid = rseqc(sample, util, outdir + "/tmp", infile, outfile, outdir, logfile, logdir, softwareConfig, refConfig)
+
+			tids += tid
+		}
+		
+	}
+
+	// run bedtools genome coverage (for rnaseq)
+	if(metric == "bedtools") {
+		for( string util : bedtoolsUtils ) {
+			outfile = infile.replace('/alignment/', '/alignment_metrics/' + metric + '/')
+			logfile = sample + "." + aligner + "." + metric +  '.' + util + ".log"
+			tid = bedtools(sample, util, targetfile, infile, outfile, outdir, logfile, logdir, softwareConfig, refConfig)
+
+			tids += tid
+		}
+		
+	}
+	
+	wait
+
+	// run end
+	println info("RNAseq::05_Run_RNAseqMetrics", "END | sm=$sample | aln=$aligner | mts=$metric")
+
+}
+

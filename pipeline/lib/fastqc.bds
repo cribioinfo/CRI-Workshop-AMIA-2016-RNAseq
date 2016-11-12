@@ -1,0 +1,76 @@
+#!/usr/bin/env bds
+
+include "print.bds"
+include "getmem.bds"
+
+string[] fastqc(string sample, string readgroup, string infile, string outfile, string outdir, string logfile, string logdir, string softwareConfig) {
+
+	// initialize
+	string{} swParam = config(softwareConfig)
+	string modname = "RNAseq::fastqc"
+	string[] modlist
+	string exe
+	string modsource
+	string modload = ""
+	int threads = 1
+	int memory = 1
+	int modFlag = 0
+
+	// println info(modname, "START | sm=$sample | rg=$readgroup")
+
+	string[] tids
+	string[] infiles = infile.split(",")
+	string[] outfiles = outfile.split(",")
+	string inputString = ""
+	int infileTotal = infiles.size()
+	int outfileTotal = outfiles.size()
+
+	// assign values
+	if(swParam.hasKey("java_module")) { modlist.push(swParam{"java_module"}) }
+	if(swParam.hasKey("main_module_source")) { modsource = swParam{"main_module_source"} }
+	if(swParam.hasKey("main_use_module")) { modFlag = swParam{"main_use_module"}.parseInt() }
+	if(swParam.hasKey("fastqc_exe")) { exe = swParam{"fastqc_exe"} }
+	if(swParam.hasKey("fastqc_module")) { modlist.push(swParam{"fastqc_module"}) }
+	if(swParam.hasKey("fastqc_threads")) { threads = swParam{"fastqc_threads"}.parseInt() }
+	if(swParam.hasKey("fastqc_mem")) { memory = swParam{"fastqc_mem"}.parseInt() }
+
+	if(modFlag == 1) {
+		if(modsource.length() > 0) { modload = ". $modsource; " }
+		for(string mod : modlist) { modload += "module load $mod; " }
+	} else { modload = '' }
+	
+	memory = getmem((memory+1) * G, threads) // fastqc uses java ...
+
+	inputString = infiles.join(" ")
+
+	// sanity check
+	if(!(((infileTotal == 1) && (outfileTotal == 1)) || ((infileTotal == 2) && (outfileTotal == 2)))) { 
+		error info(modname, "sm=$sample | rg=$readgroup | infiles and/or outfiles count incorrect! in=$infileTotal,out=$outfileTotal" ) 
+	}
+
+	// run start
+	if(! outdir.isDir()) { outdir.mkdir() }	
+	if(! logdir.isDir()) { logdir.mkdir() }	
+
+	if(outfiles <- infiles) { 
+		println info(modname, "task=run_fastqc | sm=$sample | rg=$readgroup | run=1")
+
+		tid := task(outfiles <- infiles, cpus := threads, mem := memory) {
+			sys echo "$sample::$readgroup::fastqc"
+			sys $modload
+			sys $exe --extract -o $outdir -t $threads --nogroup $inputString >& $logdir/$logfile
+			sys sleep $safeSleep
+		}
+
+		tids.push(tid)
+		wait
+	}
+	else {
+		println info(modname, "task=run_fastqc | sm=$sample | rg=$readgroup | run=0")
+	}
+	
+	// run end
+	// println info(modname, "END | sm=$sample | rg=$readgroup")
+	
+	return tids
+}

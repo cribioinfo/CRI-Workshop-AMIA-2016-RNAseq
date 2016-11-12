@@ -1,0 +1,110 @@
+#!/usr/bin/env bds
+
+
+include "print.bds"
+include "getmem.bds"
+
+string[] samtools(string sample, string util, string refGenome, string targetfile, int paired, string infile, string outfile, string outdir, string logfile, string logdir, string softwareConfig) {
+
+	// initialize
+	string{} swParam = config(softwareConfig)
+	string[] modlist
+	string modname = "RNAseq::samtools"
+	string samtoolsExe
+	string modsource
+	string modload = ""
+	string javaMaxMemStr = ""
+	int threads = 1
+	int memory = 1
+	int modFlag = 0
+
+	string[] tids
+	string tid
+	string[] infiles = infile.split(",")
+	string inputString
+	int infileTotal
+	// int maxMemPerThread
+
+	// assign values
+	if(swParam.hasKey("java_module")) { modlist.push(swParam{"java_module"}) }
+	if(swParam.hasKey("main_module_source")) { modsource = swParam{"main_module_source"} }
+	if(swParam.hasKey("main_use_module")) { modFlag = swParam{"main_use_module"}.parseInt() }
+	if(swParam.hasKey("samtools_exe")) { samtoolsExe = swParam{"samtools_exe"} }
+	if(swParam.hasKey("samtools_module")) { modlist.push(swParam{"samtools_module"}) }
+	if(swParam.hasKey("samtools_threads")) { threads = swParam{"samtools_threads"}.parseInt() }
+	if(swParam.hasKey("samtools_mem")) { memory = swParam{"samtools_mem"}.parseInt() }
+	// if(swParam.hasKey("samtools_max_mem_per_thread")) { maxMemPerThread = swParam{"samtools_max_mem_per_thread"}.parseInt() }
+
+	if(modFlag == 1) {
+		if(modsource.length() > 0) { modload = ". $modsource; " }
+		for(string mod : modlist) { modload += "module load $mod; " }
+	} else { modload = '' }
+	
+	memory = getmem(memory * G, threads)
+
+	infileTotal = infiles.size()
+	// maxMemPerThread = memory / threads
+	
+	// println info(modname, "START | sm=$sample | util=$util | bamTotal=$infileTotal")
+
+	// run start
+	if(! outdir.isDir()) { outdir.mkdir() }
+	if(! logdir.isDir()) { logdir.mkdir() }	
+	
+	// merge bam files
+	if(infileTotal == 1) {
+		if(util == "RetrieveOnTarget") {
+			// truncated bam???
+			if(outfile + ".bai" <- infile) { 
+				println info(modname, " task=run_retrieveBam | run=1")
+				tid = task(cpus := threads, mem := memory) {
+					sys echo "$sample::samtools::$util"
+					sys $modload
+					sys $samtoolsExe view -L $targetfile -bh $infile > $outfile 2> $logdir/$logfile
+					sys $samtoolsExe index $outfile >> $logdir/$logfile 2>&1
+					sys sleep $safeSleep
+				}
+
+				tids.push(tid)
+			}
+			else {
+				println info(modname, " task=run_retrieveBam | run=0")
+			}
+
+		}
+		else if(util == "RemoveDuplicates") {
+			// samtools can't work on PE and SE reads in one bam file at the same time
+			if(outfile + ".bai" <- infile) { 
+				println info(modname, " task=run_rmdup | run=1")
+				// single-end
+				tid = task(cpus := threads, mem := memory, paired == 0) {
+					sys echo "$sample::samtools::$util""SE"
+					sys $modload
+					sys $samtoolsExe rmdup -s $infile $outfile >& $logdir/$logfile
+					sys $samtoolsExe index $outfile >> $logdir/$logfile 2>&1
+					sys sleep $safeSleep
+				}
+				// paired-end
+				tid = task(cpus := threads, mem := memory, paired == 1) {
+					sys echo "$sample::samtools::$util""PE"
+					sys $modload
+					sys $samtoolsExe rmdup $infile - 2> $logdir/$logfile | $samtoolsExe rmdup -s - $outfile 2>> $logdir/$logfile
+					sys $samtoolsExe index $outfile >> $logdir/$logfile 2>&1
+					sys sleep $safeSleep
+				}
+			}
+			else {
+				println info(modname, " task=run_rmdup | run=0")
+			}
+
+		}
+
+
+		tids.push(tid)
+	}
+
+	// println info(modname, "END | sm=$sample | util=$util | bamTotal=$infileTotal")
+	
+	return tids
+}
+

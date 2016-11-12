@@ -1,0 +1,70 @@
+#!/usr/bin/env bds
+
+void Run_QualityControl(string sample, string projdir, string sampleConfig, string flagConfig, string refConfig, string softwareConfig) {
+
+	println info("RNAseq::01_Run_QualityControl", "START | sm=$sample")
+
+	// ------------- INCLUDE ------------- //
+
+	include "../lib/print.bds"
+	// include "lib/header.bds"
+	include "../lib/fastqc.bds"
+	include "../lib/checkqc.bds"
+
+	//sys source "configs/module.rc"
+
+	// ------------- MAIN ------------- //
+
+	// initialize
+	string{} smParam = config(sampleConfig)
+	string{} rgParam
+	string[] rgConfigs
+	string[] pids
+	string infile
+	string outfile
+	string resultdir
+	string outdir
+	string logfile
+	string logdir
+	string readgroup
+
+	// assign values
+	if(smParam.hasKey("rg_configs")) { rgConfigs = smParam{"rg_configs"}.split(",") }
+	else { 
+		error info("RNAseq::01_Run_QualityControl", "sm=$sample | rg_configs does not exist in the config file! config = $sampleConfig") 
+	}
+	if(smParam.hasKey("sample_result_dir")) { resultdir = smParam{"sample_result_dir"} }
+	if(smParam.hasKey("sample_log_dir")) { logdir = smParam{"sample_log_dir"} }
+
+	if(! resultdir.exists()) { resultdir.mkdir() }
+	outdir = resultdir + "/qc_reports"
+	if(! outdir.isDir()) { outdir.mkdir() }	
+	
+	// run start
+	for (string cfg : rgConfigs) {
+		rgParam = config(cfg)
+		readgroup = ""
+		infile = ""
+		outfile = ""
+
+		if(rgParam.hasKey("readgroup")) { readgroup = rgParam{"readgroup"} }
+		if(rgParam.hasKey("seqfiles")) { infile = rgParam{"seqfiles"} }
+		if(rgParam.hasKey("fastqc_files")) { outfile = rgParam{"fastqc_files"} }
+
+		logfile = readgroup + ".fastqc.log"
+		pid := par fastqc(sample, readgroup, infile, outfile, outdir, logfile, logdir, softwareConfig)
+		pids.push(pid)
+	}
+
+	wait pids
+
+	// check QC condition: PASS or FAIL?
+	logfile = sample + ".checkqc.log";
+	checkqc(sample, resultdir, logfile, logdir, softwareConfig, sampleConfig) 
+
+	wait 
+
+	// run end 
+	println info("RNAseq::01_Run_QualityControl", "END | sm=$sample")
+
+}

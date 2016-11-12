@@ -1,0 +1,30 @@
+## pipeline tests
+pipeline/test/*
+!pipeline/test
+!pipeline/test/data
+!pipeline/test/DLBC.metadata.txt
+!pipeline/test/DLBC.pipeline.yaml
+!pipeline/test/Build_RNAseq.DLBC.sh
+!pipeline/test/Submit_RNAseq.DLBC.sh
+
+## notebooks
+notebook_ext/ipynb_data/output*
+notebook_ext/ipynb_data/tmp*
+!notebook_ext/2016-AMIA-Workshop-AWS-iPython-Guide.pdf
+!notebook_ext/ipynb_data/input
+!notebook_ext/ipynb_data/assets
+!notebook_ext/ipynb_data/assets/multiqc_report.html
+
+## outputs
+hsa04010.gene_all.pathview.png
+
+## other
+example*
+*myProject*
+*.log*
+*.html
+*.chp
+*.js
+*.pdf
+*.chp
+*.ipynb_checkpoints

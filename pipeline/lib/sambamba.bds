@@ -1,0 +1,125 @@
+#!/usr/bin/env bds
+
+
+include "print.bds"
+include "getmem.bds"
+
+string[] sambamba(string sample, string util, string refGenome, string targetfile, string tmpdir, string infile, string outfile, string outdir, string logfile, string logdir, string softwareConfig) {
+
+	// initialize
+	string{} swParam = config(softwareConfig)
+	string[] modlist
+	string modname = "RNAseq::sambamba"
+	string exe
+	string modsource
+	string modload = ""
+	int threads = 1
+	int memory = 1
+	int modFlag = 0
+
+	string[] tids
+	string tid
+	string[] infiles = infile.split(",")
+	string inputString
+	string paramString = ''
+	int infileTotal
+	int rmdupFlag
+	// int maxMemPerThread
+
+	// assign values
+	if(swParam.hasKey("main_module_source")) { modsource = swParam{"main_module_source"} }
+	if(swParam.hasKey("main_use_module")) { modFlag = swParam{"main_use_module"}.parseInt() }
+	if(swParam.hasKey("sambamba_exe")) { exe = swParam{"sambamba_exe"} }
+	if(swParam.hasKey("sambamba_module")) { modlist.push(swParam{"sambamba_module"}) }
+	if(swParam.hasKey("sambamba_threads")) { threads = swParam{"sambamba_threads"}.parseInt() }
+	if(swParam.hasKey("sambamba_mem")) { memory = swParam{"sambamba_mem"}.parseInt() }
+	if(swParam.hasKey("sambamba_rmdupFlag")) { rmdupFlag = swParam{"sambamba_rmdupFlag"}.parseInt() }
+
+	// if(swParam.hasKey("sambamba_max_mem_per_thread")) { maxMemPerThread = swParam{"sambamba_max_mem_per_thread"}.parseInt() }
+
+	if(modFlag == 1) {
+		if(modsource.length() > 0) { modload = ". $modsource; " }
+		for(string mod : modlist) { modload += "module load $mod; " }
+	} else { modload = '' }
+	
+	// memory = getmem(memory * G, threads)
+
+	infileTotal = infiles.size()
+	// maxMemPerThread = memory / threads
+	inputString = infiles.join(' ')
+	if(rmdupFlag == 1) { paramString = ' -r' }
+	
+	// println info(modname, "START | sm=$sample | util=$util | bamTotal=$infileTotal")
+
+	// run start
+	if(! outdir.isDir()) { outdir.mkdir() }
+	if(! logdir.isDir()) { logdir.mkdir() }	
+	if(! tmpdir.isDir()) { tmpdir.mkdir() }
+
+	// sambamba markdup works with multiple files
+	if(util == "MarkDuplicates") {
+		if(outfile + ".bai" <- infile) { 
+			println info(modname, " task=run_markdup | run=1")
+			// single or paired-end
+			tid = task(cpus := threads, mem := memory) {
+				sys echo "$sample::sambamba::$util"
+				sys $modload
+				sys $exe markdup $paramString -t $threads --tmpdir $tmpdir $inputString $outfile 2> $logdir/$logfile
+				sys sleep $safeSleep
+			}
+
+			tids.push(tid)
+		}
+		else {
+			println info(modname, " task=run_markdup | run=0")
+		}
+	}
+	
+	// merge bam files
+	if((infileTotal >= 2) && (util == "MergeSamFiles")) {
+		if(outfile <- infiles) {
+			println info(modname, "task=run_mergeBam | run=1")
+			tid = task(outfile + ".bai" <- infiles, cpus := threads, mem := memory, \
+				inputString != "") {
+				sys echo "$sample::sambamba::$util"
+				sys $modload
+				sys $exe merge -t $threads $outfile $inputString 2> $logdir/$logfile
+				sys sleep $safeSleep
+			}
+
+			tids.push(tid)
+		}
+		else {
+			println info(modname, "task=run_mergeBam | run=0")
+		}
+	}
+
+
+	if(infileTotal == 1) {
+		if(util == "RetrieveOnTarget") {
+			// truncated bam???
+			if(outfile + ".bai" <- infile) { 
+				println info(modname, " task=run_retrieveBam | run=1")
+				tid = task(cpus := threads, mem := memory) {
+					sys echo "$sample::sambamba::$util"
+					sys $modload
+					sys $exe view -t $threads -f bam -L $targetfile -o $outfile $infile 2> $logdir/$logfile
+					sys sleep $safeSleep
+				}
+
+				tids.push(tid)
+			}
+			else {
+				println info(modname, " task=run_retrieveBam | run=0")
+			}
+
+		}
+
+		tids.push(tid)
+	}
+
+	// println info(modname, "END | sm=$sample | util=$util | bamTotal=$infileTotal")
+	
+	return tids
+}
+

@@ -1,0 +1,7 @@
+Sample	Library	ReadGroup	Platform	SequencingCenter	Date	Lane	Unit	Flavor	Encoding	Run	Genome	NucleicAcid	Location	Seqfile1
+KO01	KO01	SRR1205282	Illumina	SRA	7/22/2015	7	FCC2B5CACXX	1x49	33	0	grch38	rnaseq	/home/ubuntu/data/rnaseq/subset/fastq_files	KO01.test.fastq.gz
+#KO02	KO02	SRR1205283	Illumina	SRA	7/23/2015	7	FCC2B5CACXX	1x49	33	0	grch38	rnaseq	/home/ubuntu/data/rnaseq/subset/fastq_files	KO02.test.fastq.gz
+#KO03	KO03	SRR1205284	Illumina	SRA	7/24/2015	7	FCC2B5CACXX	1x49	33	0	grch38	rnaseq	/home/ubuntu/data/rnaseq/subset/fastq_files	KO03.test.fastq.gz
+WT01	WT01	SRR1205285	Illumina	SRA	7/25/2015	4	FCC2C3CACXX	1x49	33	0	grch38	rnaseq	/home/ubuntu/data/rnaseq/subset/fastq_files	WT01.test.fastq.gz
+#WT02	WT02	SRR1205286	Illumina	SRA	7/26/2015	4	FCC2C3CACXX	1x49	33	0	grch38	rnaseq	/home/ubuntu/data/rnaseq/subset/fastq_files	WT02.test.fastq.gz
+#WT03	WT03	SRR1205287	Illumina	SRA	7/27/2015	4	FCC2C3CACXX	1x49	33	0	grch38	rnaseq	/home/ubuntu/data/rnaseq/subset/fastq_files	WT03.test.fastq.gz

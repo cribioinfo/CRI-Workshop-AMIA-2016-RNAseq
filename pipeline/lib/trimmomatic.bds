@@ -1,0 +1,140 @@
+#!/usr/bin/env bds
+
+include "print.bds"
+include "getmem.bds"
+
+string[] trimmomatic(string sample, string readgroup, string infile, string outfile, string outdir, string logfile, string logdir, string softwareConfig) {
+
+	// initialize
+	string{} swParam = config(softwareConfig)
+	string[] modlist
+	string modname = "RNAseq::trimmomatic"
+	string modsource
+	string modload = ""
+	string exe
+	string mod
+	string javaMaxMemStr
+	int threads = 1
+	int memory = 1
+	int modFlag = 0
+
+	// println info(modname, "START | sm=$sample | rg=$readgroup")
+
+	string[] tids
+	string[] infiles = infile.split(",")
+	string[] outfiles = outfile.split(",")
+	string in1
+	string in2 = ''
+	string out1
+	string out2 = ''
+	string out3 = ''
+	string out4 = ''
+	string inString
+	string outString
+	string paramString = ''
+	string mode
+	string adapterfasta
+	string illuminaclip
+	string slidingwindow
+	int infileTotal
+	int outfileTotal
+	int leading = 0
+	int minlen = 36
+	int trailing = 0
+	int fastqFormat
+
+	// assign values
+	if(swParam.hasKey("java_module")) { modlist.push(swParam{"java_module"}) }
+	if(swParam.hasKey("main_module_source")) { modsource = swParam{"main_module_source"} }
+	if(swParam.hasKey("main_use_module")) { modFlag = swParam{"main_use_module"}.parseInt() }
+	if(swParam.hasKey('main_fastq_format')) { fastqFormat = swParam{'main_fastq_format'}.parseInt() }
+	if(swParam.hasKey("trimmomatic_exe")) { exe = swParam{"trimmomatic_exe"} }
+	if(swParam.hasKey("trimmomatic_module")) { mod = swParam{"trimmomatic_module"} }
+	if(swParam.hasKey("trimmomatic_threads")) { threads = swParam{"trimmomatic_threads"}.parseInt() }
+	if(swParam.hasKey("trimmomatic_mem")) { memory = swParam{"trimmomatic_mem"}.parseInt() }
+	if(swParam.hasKey("trimmomatic_adapterfasta")) { adapterfasta = swParam{"trimmomatic_adapterfasta"} }
+		if(swParam.hasKey("trimmomatic_illuminaclip")) { illuminaclip = swParam{"trimmomatic_illuminaclip"} }
+	if(swParam.hasKey("trimmomatic_slidingwindow")) { slidingwindow = swParam{"trimmomatic_slidingwindow"} }
+	if(swParam.hasKey("trimmomatic_leading")) { leading = swParam{"trimmomatic_leading"}.parseInt() }
+	if(swParam.hasKey("trimmomatic_trailing")) { trailing = swParam{"trimmomatic_trailing"}.parseInt() }
+	if(swParam.hasKey("trimmomatic_minlen")) { minlen = swParam{"trimmomatic_minlen"}.parseInt() }
+
+	if(modFlag == 1) {
+		if(modsource.length() > 0) { modload = ". $modsource; " }
+		for(string mod : modlist) { modload += "module load $mod; " }
+	} else { modload = '' }
+
+	// memory = getmem(memory * G, threads)
+
+	if(memory > 0) {
+		javaMaxMemStr = '-Xmx' + memory + 'G'
+	}
+	
+	infileTotal = infiles.size()
+	outfileTotal = outfiles.size()
+	in1 = infiles.head()
+	out1 = outfiles.head()
+
+	// sanity check
+	if(adapterfasta.length() == 0) {
+		println info(modname, "sm=$sample | rg=$readgroup | Warning! Adapter FASTA file missing. Specify it in the pipeline YAML file. Program terminated!")
+		exit 1
+	}
+
+	// decide read type: single or paired-end
+	if(infileTotal == 1) {
+		mode = 'SE'
+	} else if(infileTotal == 2) {
+		mode = 'PE'
+		(in1, in2) = infiles
+		(out1, out2) = outfiles
+	} else {
+		println info(modname, "sm=$sample | rg=$readgroup | Warning! input fastq file count is not 1 or 2. Possible wrong inputs? infileTotal=" + infileTotal)
+	}
+
+	// set up parameter strings
+	inString = in1 + ' ' + in2
+	outString = out1 + ' ' + out2 + ' ' + out3 + ' ' + out4
+	if(fastqFormat > 0) { paramString += ' -phred' + fastqFormat }
+	paramString += ' ' + inString + ' ' + outString
+	if((adapterfasta.length() > 0) && (illuminaclip.length() > 0)) { 
+		paramString += ' ILLUMINACLIP:' + adapterfasta + ':' + illuminaclip
+	}
+	if(leading > 0) { paramString += ' LEADING:' + leading }
+	if(trailing > 0) { paramString += ' TRAILING:' + trailing }
+	if(minlen > 0) { paramString += ' MINLEN:' + minlen }
+	if(slidingwindow.length() > 0) { paramString += ' SLIDINGWINDOW:' + slidingwindow }
+
+	// println paramString
+	// println javaMaxMemStr
+	// println exe
+
+	// run start
+	if(! outdir.isDir()) { outdir.mkdir() }	
+	if(! logdir.isDir()) { logdir.mkdir() }	
+
+	if(outfiles <- infiles) { 
+		println info(modname, "task=run_preproc | sm=$sample | rg=$readgroup | run=1")
+
+		tid := task(outfiles <- infiles, cpus := threads, mem := memory, \
+			in1.length() > 0) {
+			sys echo "$sample::$readgroup::trimmomatic"
+			sys set -o pipefail
+			sys $modload
+			sys java $javaMaxMemStr -jar $exe $mode -threads $threads $paramString 2> $logdir/$logfile
+			sys sleep $safeSleep
+
+		}
+
+		tids.push(tid)	
+	}
+	else {
+		println info(modname, "task=run_preproc | sm=$sample | rg=$readgroup | run=0")
+	}	
+
+	// run end	
+	// println info(modname, "END | sm=$sample | rg=$readgroup")
+
+	return tids
+}
+

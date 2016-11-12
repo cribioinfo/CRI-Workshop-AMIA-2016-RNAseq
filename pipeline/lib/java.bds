@@ -1,0 +1,5 @@
+#!/usr/bin/env bds
+
+// Avoid Java overwhelming threading!
+baseJava := "java -XX:ParallelGCThreads=2 "
+

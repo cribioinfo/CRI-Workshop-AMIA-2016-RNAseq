@@ -1,0 +1,104 @@
+#!/usr/bin/env bds
+
+include "print.bds"
+include "getmem.bds"
+
+string[] checkqc(string sample, string outdir, string logfile, string logdir, string softwareConfig, string sampleConfig) {
+
+	// initialize
+	string{} swParam = config(softwareConfig)
+	string{} smParam = config(sampleConfig)
+	string{} rgParam
+	string[] rgConfigs
+	string[] modlist
+	string modname = "RNAseq::checkqc"
+	string exe
+	string path
+	string modsource
+	string modload = ""
+	int threads = 1
+	int memory = 1
+	int modFlag = 0
+
+	// println info(modname, "START | sm=$sample")
+	
+	string[] tids
+	string[] infiles // record fastqc.zip by readgroup
+	string[] inlist // record ALL fastqc.zip files by both readgroup and R1/R2
+	string[] outfiles = [outdir + "/" + sample + ".qc_summary.tsv", outdir + "/" + sample + ".qc_flag.tsv", outdir + "/sample.exclude"]
+	string[] readgroups
+	string tid
+	string metrics
+	string inString = ""
+	string rgString = ""
+	int infileTotal
+	int readgroupTotal
+	int forceIn = 0
+
+	// assign values
+	if(swParam.hasKey("java_module")) { modlist.push(swParam{"java_module"}) }
+	if(swParam.hasKey("main_module_source")) { modsource = swParam{"main_module_source"} }
+	if(swParam.hasKey("main_use_module")) { modFlag = swParam{"main_use_module"}.parseInt() }
+	if(swParam.hasKey("util_path")) { path = swParam{"util_path"} }
+	if(swParam.hasKey("util_check_qc_exe")) { exe = swParam{"util_check_qc_exe"} }
+	if(swParam.hasKey("main_qc_check")) { metrics = swParam{"main_qc_check"} }
+	if(smParam.hasKey("force_include")) { forceIn = smParam{"force_include"}.parseInt() }
+	if(smParam.hasKey("rg_configs")) { rgConfigs = smParam{"rg_configs"}.split(",") }
+
+	for (string cfg : rgConfigs) {
+			rgParam = config(cfg)
+			if(rgParam.hasKey("readgroup")) { readgroups.push(rgParam{"readgroup"}) }
+			if(rgParam.hasKey("fastqc_files")) { 
+				infiles.push(rgParam{"fastqc_files"}.replace(",",":"))
+				inlist += rgParam{"fastqc_files"}.split(",")
+			}
+		}
+
+
+	if(modFlag == 1) {
+		if(modsource.length() > 0) { modload = ". $modsource; " }
+		for(string mod : modlist) { modload += "module load $mod; " }
+	} else { modload = '' }
+	
+	memory = getmem(memory * G, threads)	
+
+	infileTotal = infiles.size()
+	readgroupTotal = readgroups.size()
+	inString = infiles.join(",")
+	rgString = readgroups.join(",")
+
+	// println "===================== metrics = $metrics\nrgString = $rgString\ninString = $inString";
+
+	// sanity check
+	if(infileTotal != readgroupTotal) { 
+		error info(modname, "sm=$sample | fastqc zip file list and readgroup list are not the same size! in=$infileTotal,rg=$readgroupTotal" ) 
+	}
+
+	// run start
+	if(! outdir.isDir()) { outdir.mkdir() }	
+	if(! logdir.isDir()) { logdir.mkdir() }	
+
+	// because sample.exclude file will be removed afterwards if forceIn=1
+	// always regenerate it if forceIn=0
+	if((outfiles <- inlist) || (forceIn == 0)) { 
+		println info(modname, "task=run_checkqc | sm=$sample | run=1")
+
+		tid := task(((outfiles <- inlist) || (forceIn == 0)), cpus := threads, mem := memory, \
+			inlist.size() > 0) {
+			sys echo "$sample::checkqc"
+			sys $modload
+			sys $path/$exe -f $inString -rg $rgString -s $sample -o $outdir -m $metrics >& $logdir/$logfile
+		}
+
+		tids.push(tid)
+		wait
+	}
+	else {
+		println info(modname, "task=run_checkqc | sm=$sample | run=0")
+	}
+	
+	// run end
+	// println info(modname, "END | sm=$sample")
+	
+	return tids
+}

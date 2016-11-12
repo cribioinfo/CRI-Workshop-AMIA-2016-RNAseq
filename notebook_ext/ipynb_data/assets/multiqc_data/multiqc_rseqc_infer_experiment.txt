@@ -1,0 +1,7 @@
+Sample	failed	se_antisense	se_sense
+home | ubuntu | data | rnaseq | fullset | rseqc | KO01.star	0.2347	0.3737	0.3916
+home | ubuntu | data | rnaseq | fullset | rseqc | KO02.star	0.2532	0.3617	0.3851
+home | ubuntu | data | rnaseq | fullset | rseqc | KO03.star	0.3042	0.3336	0.3622
+home | ubuntu | data | rnaseq | fullset | rseqc | WT01.star	0.1429	0.4215	0.4356
+home | ubuntu | data | rnaseq | fullset | rseqc | WT02.star	0.1474	0.4174	0.4352
+home | ubuntu | data | rnaseq | fullset | rseqc | WT03.star	0.2016	0.3951	0.4033
