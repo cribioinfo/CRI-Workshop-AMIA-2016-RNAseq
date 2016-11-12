@@ -56,16 +56,6 @@ for (string sample : samples) {
 
 wait pids
 
-// pids = []
-// for (string aligner : aligners) {
-// 	pid := par RunSampleMulti(project, aligner, callers, projdir, multiConfig, flagConfig, refConfig, softwareConfig)
-// 	pids.push(pid)
-// }
-
-// wait pids 
-
-// wait
-
 // run end
 println info("RNAseq", "END | proj=$project")
 PrintFooter()
@@ -113,26 +103,6 @@ void RunSampleAligner(string sample, string aligner, string[] callers, string pr
 
 }
 
-// void RunSampleMulti(string project, string aligner, string[] callers, string projdir, string multiConfig, string flagConfig, string refConfig, string softwareConfig) {
-
-// 	string[] pids
-
-// 	for(string caller : callers) {
-// 		pid := par RunSampleMultiCall(project, aligner, caller, projdir, multiConfig, flagConfig, refConfig, softwareConfig)
-// 	}
-
-// 	// wait pids 
-// 	sys sleep 10 
-
-// }
-
-// void RunSampleMultiCall(string project, string aligner, string caller, string projdir, string multiConfig, string flagConfig, string refConfig, string softwareConfig) {
-
-// 	Run_ReadCountMulti(project, aligner, caller, projdir, multiConfig, flagConfig, refConfig, softwareConfig)
-
-// 	sys sleep 10 
-
-// }
 
 void PrintHeader() {
 	println "\n--------------------------------------------------------------------------------"
