@@ -12,7 +12,6 @@ notebook_ext/ipynb_data/output*
 notebook_ext/ipynb_data/tmp*
 !notebook_ext/ipynb_data/input*
 !notebook_ext/ipynb_data/assets*
-!notebook_ext/lecture_notes*
 !notebook_ext/ipynb_data/assets/multiqc_report.html
 
 ## outputs
