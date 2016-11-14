@@ -2,6 +2,8 @@
 
 The pipelines are designed to automate good-practice RNAseq analysis protocol including QC, read preprocessing, alignment and transcript quantification. Afterwards, DEG detection and GO/pathway enrichment analysis is performed using R & Bioconductor following the [tutorials](https://github.com/cribioinfo/CRI-Workshop-AMIA-2016-RNAseq/blob/master/Run_RNAseq.tutorial.rendered.ipynb).
 
+![GitHub Logo](https://github.com/cribioinfo/CRI-Workshop-AMIA-2016-RNAseq/blob/master/notebook_ext/ipynb_data/assets/Figure29.png)
+
 The pipeline is designed to be
 
 * **Automate** *Full analysis pipeline from QC to read counts with submission of one master script*
