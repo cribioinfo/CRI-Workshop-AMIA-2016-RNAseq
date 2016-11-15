@@ -185,4 +185,4 @@ Questions and comments? Please post on [Issues](https://github.com/cribioinfo/CR
 
 # More
 
-* [RNAseq Workshop on AWS EC2](https://github.com/riyuebao/CRI-Workshop-Nov2016-RNAseq/blob/master/Run_RNAseq.tutorial.rendered.ipynb) *Full introduction and hands-on practice of RNAseq analysis & clinical applications*
+* [RNAseq Workshop on AWS EC2](https://github.com/cribioinfo/CRI-Workshop-AMIA-2016-RNAseq/blob/master/Run_RNAseq.tutorial.rendered.ipynb) *Full introduction and hands-on practice of RNAseq analysis & clinical applications*
